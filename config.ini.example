@@ -1,0 +1,41 @@
+; Copie de référence de config.ini.
+; Le vrai config.ini est écrit par install.py et n'est pas versionné :
+; il contient des chemins absolus propres à la machine.
+
+[comfyui]
+; ComfyUI démarré par run.py sur un port dédié : une instance
+; personnelle sur 8188 n'est ni touchée ni lancée.
+url = http://127.0.0.1:8288
+; Racine de l'installation ComfyUI (portable Windows ou clone git).
+portable_dir = C:\Sources\comfyui-zimage\comfyui
+; Dossier de sortie de ComfyUI, pour le déplacement atomique vers media/.
+output_dir = C:\Sources\comfyui-zimage\comfyui\ComfyUI\output
+; true = run.py démarre et arrête ComfyUI lui-même.
+managed = true
+; Arguments supplémentaires passés à ComfyUI, séparés par des espaces.
+; Sous 16 Go de VRAM, --reserve-vram 2 laisse de la place à Ollama.
+extra_args =
+; Délai maximal d'un job, en secondes (premier chargement à froid inclus).
+job_timeout = 900
+
+[server]
+port = 8000
+public_base_url = http://127.0.0.1:8000
+
+[ollama]
+; false quand Ollama est absent : les prompts partent verbatim.
+enabled = true
+translate_model = translategemma
+url = http://127.0.0.1:11434
+
+[models]
+; Variante choisie par install.py selon l'accélérateur détecté.
+; CUDA : z_image_turbo_int8_convrot / qwen_3_4b_fp8_mixed
+; MPS, CPU, ROCm : z_image_turbo_bf16 / qwen_3_4b
+unet = z_image_turbo_bf16.safetensors
+clip = qwen_3_4b.safetensors
+vae = ae.safetensors
+
+[image]
+default_width = 1024
+default_height = 1024

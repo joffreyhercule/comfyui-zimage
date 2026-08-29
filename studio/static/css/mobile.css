@@ -1,0 +1,36 @@
+/* mobile.css — dernier chargé : ses règles doivent l'emporter sur les précédentes. */
+
+@media (max-width: 780px) {
+    /* La galerie passe en panneau superposé : à cette largeur, deux colonnes ne
+       laissent plus la place à l'image. */
+    .gallery-sidebar {
+        position: fixed;
+        inset-block: 0;
+        inset-inline-start: 0;
+        z-index: 40;
+        width: min(88vw, var(--sidebar-w));
+        flex-basis: auto;
+        box-shadow: 0 0 40px rgba(0, 0, 0, .6);
+    }
+
+    .messages { padding: 12px; }
+
+    .msg-media { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+    .composer { padding: 8px 10px 12px; }
+    .composer-options { gap: 8px; }
+    .opt input { width: 78px; }
+    .opt-seed input { width: 110px; }
+
+    .app-title { font-size: 14px; }
+    .lang-select { max-width: 110px; }
+
+    .lightbox { padding: 10px; }
+    #lightbox-img { max-height: 52vh; }
+    .meta-key { flex-basis: 70px; }
+}
+
+@media (max-width: 420px) {
+    .opt { font-size: 10px; }
+    .send-btn { padding: 10px 13px; }
+}

@@ -1,0 +1,82 @@
+/* input.css — barre de saisie et panneau d'options (une seule ligne). */
+
+.composer {
+    flex: 0 0 auto;
+    border-block-start: 1px solid var(--border);
+    background: var(--surface-light);
+    padding: 10px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.composer-options {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.opt {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.opt input { width: 92px; }
+
+.opt-lot { gap: 4px; }
+.lot-group { display: flex; gap: 4px; }
+
+.lot-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-lighter);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 13px;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.lot-btn:hover { border-color: var(--border-light); }
+.lot-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.composer-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+#prompt {
+    flex: 1;
+    resize: none;
+    max-height: 180px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+}
+
+.send-btn {
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background .15s, opacity .15s;
+}
+.send-btn:hover { background: var(--accent-hover); }
+.send-btn:disabled { opacity: .5; cursor: default; }
+
+.composer-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.45;
+}

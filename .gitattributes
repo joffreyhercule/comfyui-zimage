@@ -1,0 +1,19 @@
+# Le projet s'installe sous Windows, Linux et macOS : les fins de ligne ne peuvent
+# pas être laissées au hasard de la configuration `core.autocrlf` de chacun.
+
+# Par défaut, LF dans le dépôt et dans la copie de travail.
+* text=auto eol=lf
+
+# Les scripts shell DOIVENT rester en LF : un `install.sh` en CRLF échoue sous Linux
+# avec « /bin/sh^M: bad interpreter », sans indice sur la cause.
+*.sh text eol=lf
+
+# Les .bat, eux, veulent des CRLF : cmd.exe s'embrouille sur certaines constructions
+# en LF (labels, blocs entre parenthèses).
+*.bat text eol=crlf
+
+# Binaires : jamais de conversion.
+*.png binary
+*.jpg binary
+*.safetensors binary
+*.7z binary

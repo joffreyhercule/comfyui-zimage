@@ -1,0 +1,37 @@
+{
+  "type": "image",
+  "inputs": {
+    "prompt": {
+      "node": "45",
+      "field": "text"
+    },
+    "seed": {
+      "node": "44",
+      "field": "seed"
+    },
+    "width": {
+      "node": "41",
+      "field": "width"
+    },
+    "height": {
+      "node": "41",
+      "field": "height"
+    },
+    "output_prefix": {
+      "node": "9",
+      "field": "filename_prefix"
+    },
+    "unet": {
+      "node": "46",
+      "field": "unet_name"
+    },
+    "clip": {
+      "node": "39",
+      "field": "clip_name"
+    },
+    "vae": {
+      "node": "40",
+      "field": "vae_name"
+    }
+  }
+}

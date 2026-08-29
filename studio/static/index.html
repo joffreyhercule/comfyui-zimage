@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title data-i18n="app.title">Images — Z-Image Turbo</title>
+<!-- Favicon en data-URI : sans lui le navigateur réclame /favicon.ico et salit la
+     console d'un 404 à chaque chargement. Aucun fichier à servir. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%238b5cf6'/%3E%3Ccircle cx='12' cy='12' r='3.5' fill='%23fff'/%3E%3Cpath d='M5 26l7.5-9 5 6 4-4.5L27 26z' fill='%23fff'/%3E%3C/svg%3E">
+<!-- L'ORDRE COMPTE : la cascade en dépend. base → gallery → chat → input → lightbox
+     → header → mobile. Aucun CDN : tout est servi en local, hors ligne compris. -->
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/gallery.css">
+<link rel="stylesheet" href="/static/css/chat.css">
+<link rel="stylesheet" href="/static/css/input.css">
+<link rel="stylesheet" href="/static/css/lightbox.css">
+<link rel="stylesheet" href="/static/css/header.css">
+<link rel="stylesheet" href="/static/css/mobile.css">
+</head>
+<body>
+
+<div class="app-layout">
+
+  <!-- Galerie -->
+  <aside id="gallery-sidebar" class="gallery-sidebar hidden">
+    <div class="gallery-head">
+      <h2 data-i18n="gallery.title">Gallery</h2>
+      <button id="gallery-close" class="icon-btn" data-i18n-attr="title:gallery.close"
+              title="Close">✕</button>
+    </div>
+    <div class="gallery-search">
+      <input id="gallery-q" type="search" autocomplete="off"
+             data-i18n-attr="placeholder:gallery.search"
+             placeholder="Search a prompt…">
+    </div>
+    <div id="gallery-body" class="gallery-body"></div>
+  </aside>
+
+  <!-- Colonne principale -->
+  <main class="main-column">
+
+    <header class="app-header">
+      <button id="gallery-toggle" class="icon-btn" data-i18n-attr="title:gallery.open"
+              title="Gallery">☰</button>
+      <h1 class="app-title" data-i18n="app.name">Images</h1>
+      <div class="header-right">
+        <select id="lang-select" class="lang-select"
+                data-i18n-attr="title:header.language" title="Language"></select>
+        <span id="ws-dot" class="ws-dot" data-i18n-attr="title:header.disconnected"
+              title="Disconnected"></span>
+      </div>
+    </header>
+
+    <section id="messages" class="messages">
+      <div id="empty-state" class="empty-state">
+        <p class="empty-title" data-i18n="empty.title">Describe an image</p>
+        <p class="empty-hint" data-i18n="empty.hint">Z-Image Turbo generates it locally, on your machine.</p>
+      </div>
+    </section>
+
+    <footer class="composer">
+      <div class="composer-options">
+        <label class="opt">
+          <span data-i18n="opt.width">Width</span>
+          <input id="opt-width" type="number" inputmode="numeric" value="1024">
+        </label>
+        <label class="opt">
+          <span data-i18n="opt.height">Height</span>
+          <input id="opt-height" type="number" inputmode="numeric" value="1024">
+        </label>
+        <!-- Le seed n'est pas exposé ici : il est tiré à chaque génération et
+             enregistré avec l'image. Il reste pilotable par l'API et par le MCP,
+             pour qui a besoin de reproduire un résultat exact. -->
+        <div class="opt opt-lot">
+          <span data-i18n="opt.variants">Variants</span>
+          <div id="lot-group" class="lot-group" role="group"></div>
+        </div>
+      </div>
+
+      <div class="composer-row">
+        <textarea id="prompt" rows="1" autocomplete="off"
+                  data-i18n-attr="placeholder:composer.placeholder"
+                  placeholder="A black cat asleep on a red velvet sofa…"></textarea>
+        <button id="send" class="send-btn" data-i18n-attr="title:composer.send" title="Generate">
+          <span data-i18n="composer.sendLabel">Generate</span>
+        </button>
+      </div>
+
+      <!-- Visible seulement quand Ollama est absent : la fonctionnalité manquante
+           est nommée, pas masquée derrière un menu qui ne ferait rien. -->
+      <p id="no-translation" class="composer-note hidden" data-i18n="composer.noTranslation">
+        Translation is unavailable: write your prompt in English for best accuracy.
+      </p>
+    </footer>
+
+  </main>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox hidden">
+  <div class="lightbox-backdrop" data-close="1"></div>
+  <figure class="lightbox-figure">
+    <img id="lightbox-img" alt="">
+    <figcaption class="lightbox-meta">
+      <div class="meta-line"><span class="meta-key" data-i18n="meta.prompt">Prompt</span>
+        <span id="meta-prompt" class="meta-val"></span></div>
+      <div id="meta-source-line" class="meta-line hidden">
+        <span class="meta-key" data-i18n="meta.source">Written</span>
+        <span id="meta-source" class="meta-val"></span></div>
+      <div class="meta-line"><span class="meta-key" data-i18n="meta.size">Size</span>
+        <span id="meta-size" class="meta-val"></span></div>
+      <div class="meta-line"><span class="meta-key" data-i18n="meta.lang">Language</span>
+        <span id="meta-lang" class="meta-val"></span></div>
+    </figcaption>
+    <div class="lightbox-actions">
+      <button id="lb-reuse" class="action-btn" data-i18n="action.reuse">Reuse these settings</button>
+      <a id="lb-download" class="action-btn" download data-i18n="action.download">Download</a>
+      <button id="lb-delete" class="action-btn danger" data-i18n="action.delete">Delete</button>
+      <button id="lb-close" class="action-btn" data-close="1" data-i18n="action.close">Close</button>
+    </div>
+  </figure>
+</div>
+
+<script src="/static/components/gallery.js"></script>
+<script src="/static/components/lightbox.js"></script>
+<script src="/static/components/sidebar.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

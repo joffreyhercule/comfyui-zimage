@@ -1,0 +1,106 @@
+/* base.css — variables, reset, utilitaires.
+
+   L'ORDRE DE CHARGEMENT COMPTE : la cascade en dépend. Voir la liste des <link>
+   dans index.html, qui fait foi.
+
+   Tout est écrit en PROPRIÉTÉS LOGIQUES (margin-inline, inset-inline, padding-block)
+   plutôt qu'en left/right : l'arabe est dans la liste des langues, et une mise en
+   page à moitié retournée est le genre de casse qu'on ne voit qu'en la testant. */
+
+:root {
+    --surface: #0a0a0a;
+    --surface-light: #141414;
+    --surface-lighter: #1e1e1e;
+    --accent: #8b5cf6;
+    --accent-hover: #7c3aed;
+    --border: #2a2a2a;
+    --border-light: #3a3a3a;
+    --text-primary: #e5e7eb;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --danger: #ef4444;
+    --radius: 10px;
+    --radius-sm: 7px;
+    --header-h: 52px;
+    --sidebar-w: 320px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--surface);
+    color: var(--text-primary);
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+}
+
+/* Le studio d'origine masquait ses éléments avec la classe `hidden` de Tailwind,
+   chargée par CDN. Sans CDN, cette règle est ce qui empêche toute l'interface
+   cachée de s'afficher d'un coup. Ne pas la retirer. */
+.hidden { display: none !important; }
+
+.app-layout {
+    display: flex;
+    height: 100vh;
+    height: 100dvh;
+    position: relative;
+}
+
+.main-column {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+}
+
+/* --- Contrôles communs --- */
+
+button, input, select, textarea {
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+button { cursor: pointer; border: none; background: none; }
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1;
+    transition: background .15s, color .15s;
+}
+.icon-btn:hover { background: var(--surface-lighter); color: var(--text-primary); }
+
+input[type="text"], input[type="number"], input[type="search"], textarea, select {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color .15s;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+
+/* Les flèches natives des champs numériques sautent d'une unité, alors que le pas
+   utile ici est 16 : autant les retirer que laisser croire à un pas de 1. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+::selection { background: var(--accent); color: #fff; }
+
+/* Barres de défilement discrètes, cohérentes avec le fond sombre. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }

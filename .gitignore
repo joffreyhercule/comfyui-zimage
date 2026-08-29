@@ -1,0 +1,32 @@
+# Environnement Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Configuration locale (chemins absolus propres à la machine)
+config.ini
+
+# ComfyUI installé par install.py
+comfyui/
+
+# Données produites à l'exécution
+media/
+db/
+logs/
+*.part
+
+# Outils téléchargés par l'installateur (repris au besoin)
+7zr.exe
+OllamaSetup.exe
+Ollama.dmg
+*.7z
+
+# Notes de travail locales
+PLAN.md
+CLAUDE.md
+
+# Systèmes
+.DS_Store
+Thumbs.db
+desktop.ini
