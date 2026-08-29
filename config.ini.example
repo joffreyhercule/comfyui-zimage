@@ -1,15 +1,17 @@
 ; Copie de référence de config.ini.
-; Le vrai config.ini est écrit par install.py et n'est pas versionné :
-; il contient des chemins absolus propres à la machine.
+; Le vrai config.ini est écrit par install.py et n'est pas versionné : il décrit
+; l'installation de cette machine-là.
 
 [comfyui]
 ; ComfyUI démarré par run.py sur un port dédié : une instance
 ; personnelle sur 8188 n'est ni touchée ni lancée.
 url = http://127.0.0.1:8288
-; Racine de l'installation ComfyUI (portable Windows ou clone git).
-portable_dir = C:\Sources\comfyui-zimage\comfyui
+; Racine de l'installation ComfyUI (portable Windows ou clone git). Relatif au
+; projet — donc le renommer ou le déplacer ne casse rien. Un chemin absolu est
+; accepté, pour une installation ComfyUI située ailleurs.
+portable_dir = comfyui
 ; Dossier de sortie de ComfyUI, pour le déplacement atomique vers media/.
-output_dir = C:\Sources\comfyui-zimage\comfyui\ComfyUI\output
+output_dir = comfyui/ComfyUI/output
 ; true = run.py démarre et arrête ComfyUI lui-même.
 managed = true
 ; Arguments supplémentaires passés à ComfyUI, séparés par des espaces.

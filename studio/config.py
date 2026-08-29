@@ -60,20 +60,32 @@ def _ini_bool(section: str, key: str, default: bool) -> bool:
 
 # ---------- ComfyUI ----------
 
+def _path(raw: str | None, default: Path) -> Path:
+    """Chemin de `config.ini`, absolu ou **relatif au projet**.
+
+    Un chemin relatif suit le dossier : renommer ou déplacer le projet ne casse
+    alors rien. L'installateur écrit du relatif quand ComfyUI vit dans le projet,
+    et de l'absolu quand il pointe sur une installation extérieure — qui, elle, ne
+    bouge pas avec lui.
+    """
+    if not raw:
+        return default
+    path = Path(raw).expanduser()
+    return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()
+
+
 # Port 8288, pas 8188 : une installation personnelle de ComfyUI n'est ni touchée
 # ni lancée par le studio.
 COMFYUI_URL: str = _ini("comfyui", "url", os.getenv("COMFYUI_URL", "http://127.0.0.1:8288"))
 
 # Racine de l'installation ComfyUI. `resolve_comfy_layout` en déduit l'interpréteur
 # et le main.py, quelle que soit la disposition (portable Windows ou clone git).
-COMFY_PORTABLE_DIR: Path = Path(_ini(
-    "comfyui", "portable_dir",
-    os.getenv("COMFY_PORTABLE_DIR", str(PROJECT_ROOT / "comfyui")),
-))
-COMFY_OUTPUT_DIR: Path = Path(_ini(
-    "comfyui", "output_dir",
-    os.getenv("COMFY_OUTPUT_DIR", str(COMFY_PORTABLE_DIR / "ComfyUI" / "output")),
-))
+COMFY_PORTABLE_DIR: Path = _path(
+    _ini("comfyui", "portable_dir", os.getenv("COMFY_PORTABLE_DIR")),
+    PROJECT_ROOT / "comfyui")
+COMFY_OUTPUT_DIR: Path = _path(
+    _ini("comfyui", "output_dir", os.getenv("COMFY_OUTPUT_DIR")),
+    COMFY_PORTABLE_DIR / "ComfyUI" / "output")
 # `false` quand ComfyUI est démarré à la main ou par un autre outil : run.py se
 # contente alors d'attendre qu'il réponde, et ne tue rien en sortant.
 COMFY_MANAGED: bool = _ini_bool("comfyui", "managed", True)

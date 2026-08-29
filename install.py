@@ -876,11 +876,23 @@ def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
     layout = resolve_comfy_layout(comfy_root)
     output_dir = layout[2] / "output"
 
+    def portable(path: Path) -> str:
+        """Chemin relatif quand il est sous le projet, absolu sinon.
+
+        Un ComfyUI installé dans `comfyui/` suit le dossier : renommer ou déplacer
+        le projet ne demande alors aucune retouche de `config.ini`. Une installation
+        extérieure, elle, reste désignée en absolu — elle ne bouge pas avec nous.
+        """
+        try:
+            return path.relative_to(ROOT).as_posix()
+        except ValueError:
+            return str(path)
+
     parser = configparser.ConfigParser()
     parser["comfyui"] = {
         "url": f"http://127.0.0.1:{COMFY_PORT}",
-        "portable_dir": str(comfy_root),
-        "output_dir": str(output_dir),
+        "portable_dir": portable(comfy_root),
+        "output_dir": portable(output_dir),
         "managed": "true",
         # Préservé d'une installation précédente : c'est un réglage machine
         # (--reserve-vram sur une petite carte) que l'installateur n'a pas à effacer.
