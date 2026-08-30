@@ -17,7 +17,7 @@ alike.
 |---|---|
 | **Python 3.10 or newer** | [python.org/downloads](https://www.python.org/downloads/) — on Windows, tick "Add python.exe to PATH" |
 | **~25 GB of free space** | ComfyUI and the image models |
-| **A graphics card** | NVIDIA (8 GB of video memory or more) or an Apple Silicon Mac. Without one everything still works on the processor, but an image then takes tens of minutes instead of seconds, and 32 GB of RAM are needed |
+| **A graphics card** | NVIDIA **RTX 20xx / GTX 16xx or newer** (8 GB of video memory or more), or an **Apple Silicon** Mac (M1 or newer; Intel Macs are not supported). A GTX 10xx is too old for the engine's CUDA build. Without a usable card everything still works on the processor, but an image then takes tens of minutes instead of seconds, and 32 GB of RAM are needed |
 | **A decent connection** | about 15 GB to download, once |
 
 ---
@@ -129,10 +129,11 @@ memory. Open `config.ini` and replace the `extra_args =` line with:
 extra_args = --reserve-vram 2
 ```
 
-**`logs/comfyui.log` ends with "access violation" or "CUDA not available"** — the engine
-was started expecting a graphics card it cannot use. The installer writes what is needed
-into `config.ini` when it sees no usable card; if the `extra_args =` line is empty, fill
-it in yourself, then start again:
+**`logs/comfyui.log` ends with "access violation", "CUDA not available" or "no kernel
+image is available"** — the engine was started expecting a graphics card it cannot use:
+either there is none, or it is older than the RTX 20xx / GTX 16xx generation. The
+installer detects both and writes what is needed into `config.ini`; if the
+`extra_args =` line is empty, fill it in yourself, then start again:
 
 ```ini
 extra_args = --cpu --disable-cuda-malloc
@@ -140,6 +141,11 @@ extra_args = --cpu --disable-cuda-malloc
 
 Add `--bf16-unet` to that line if the machine has less than 24 GB of RAM — otherwise the
 model is loaded at full precision and asks for about 24 GB on its own.
+
+**On a Mac, everything crawls and the machine swaps** — the models weigh 20 GB, and
+Apple Silicon shares its memory between processor and GPU, so 16 GB is tight. No setting
+changes that (on Metal the engine cannot stream weights in as it goes): generate at 512
+or 768 rather than 1024.
 
 **My descriptions are not translated** — Ollama is not installed or not running. No
 harm done: write in English, or run the installer again to add it.

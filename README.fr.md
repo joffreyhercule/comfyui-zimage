@@ -17,7 +17,7 @@ comme studio.
 |---|---|
 | **Python 3.10 ou plus récent** | [python.org/downloads](https://www.python.org/downloads/) — sous Windows, cochez « Add python.exe to PATH » |
 | **~25 Go d'espace libre** | ComfyUI et les modèles d'image |
-| **Une carte graphique** | NVIDIA (8 Go de mémoire vidéo ou plus) ou un Mac Apple Silicon. Sans carte, tout fonctionne quand même sur le processeur, mais une image demande alors des dizaines de minutes au lieu de quelques secondes, et 32 Go de RAM |
+| **Une carte graphique** | NVIDIA **RTX 20xx / GTX 16xx ou plus récente** (8 Go de mémoire vidéo ou plus), ou un Mac **Apple Silicon** (M1 ou plus récent ; les Mac Intel ne sont pas pris en charge). Une GTX 10xx est trop ancienne pour la build CUDA du moteur. Sans carte utilisable, tout fonctionne quand même sur le processeur, mais une image demande alors des dizaines de minutes au lieu de quelques secondes, et 32 Go de RAM |
 | **Une bonne connexion** | environ 15 Go à télécharger, une seule fois |
 
 ---
@@ -132,10 +132,12 @@ par :
 extra_args = --reserve-vram 2
 ```
 
-**`logs/comfyui.log` se termine par « access violation » ou « CUDA not available »** — le
-moteur a démarré en comptant sur une carte graphique qu'il ne sait pas piloter.
-L'installateur écrit ce qu'il faut dans `config.ini` quand il ne voit aucune carte
-utilisable ; si la ligne `extra_args =` est vide, complétez-la vous-même, puis relancez :
+**`logs/comfyui.log` se termine par « access violation », « CUDA not available » ou
+« no kernel image is available »** — le moteur a démarré en comptant sur une carte
+graphique qu'il ne sait pas piloter : soit il n'y en a pas, soit elle est antérieure aux
+RTX 20xx / GTX 16xx. L'installateur détecte les deux cas et écrit ce qu'il faut dans
+`config.ini` ; si la ligne `extra_args =` est vide, complétez-la vous-même, puis
+relancez :
 
 ```ini
 extra_args = --cpu --disable-cuda-malloc
@@ -143,6 +145,11 @@ extra_args = --cpu --disable-cuda-malloc
 
 Ajoutez `--bf16-unet` à cette ligne si la machine a moins de 24 Go de RAM : sans quoi le
 modèle est chargé en pleine précision et en réclame 24 à lui seul.
+
+**Sur Mac, tout rampe et la machine swappe** — les modèles pèsent 20 Go, et Apple
+Silicon partage sa mémoire entre le processeur et le GPU : 16 Go, c'est juste. Aucun
+réglage n'y change rien (sur Metal, le moteur ne sait pas charger les poids au fil de
+l'eau) : générez en 512 ou 768 plutôt qu'en 1024.
 
 **Mes descriptions ne sont pas traduites** — Ollama n'est pas installé ou pas démarré.
 Ce n'est pas grave : écrivez en anglais, ou relancez l'installateur pour l'ajouter.

@@ -95,6 +95,18 @@ TORCH_INDEX = {
 # l'accélérateur détecté : hors CUDA, le torch en place n'a aucun GPU à qui parler.
 # Sans `--cpu`, ComfyUI appelle `torch.cuda.current_device()` dès l'import de
 # `model_management` et meurt en violation d'accès, avant même d'ouvrir son port.
+# La plus ancienne architecture présente dans les wheels cu130, sm_75 (Turing,
+# RTX 20xx et GTX 16xx) : `torch.cuda.get_arch_list()` du portable rend
+# ['sm_75', 'sm_80', 'sm_86', 'sm_90', 'sm_100', 'sm_120']. CUDA 13 a laissé Pascal,
+# Maxwell et Volta derrière lui, et `nvidia-smi` répond pourtant pour ces cartes : sans
+# ce contrôle, l'installation aboutit et la première image échoue sur
+# « no kernel image is available for execution on the device ».
+CUDA_MIN_CAPABILITY = (7, 5)
+
+# Marge au-dessus du poids des modèles : l'OS, Python, les activations. En dessous, la
+# machine tient encore, en swappant — d'où un avertissement, pas un refus.
+RAM_MARGIN = 4_000_000_000
+
 CPU_ARGS = ("--cpu", "--disable-cuda-malloc")
 
 # En mode CPU, ComfyUI refuse le fp16 comme le bf16 — `should_use_fp16` et
@@ -467,6 +479,37 @@ def variant_for(accelerator: str) -> str:
     return "quantized" if accelerator == "cuda" else "bf16"
 
 
+def nvidia_too_old() -> tuple[str, str] | None:
+    """`(nom, capacité)` de la carte NVIDIA si aucune n'atteint `CUDA_MIN_CAPABILITY`.
+
+    `nvidia-smi` répond pour tout ce que le pilote voit, y compris des cartes que le
+    torch qu'on va installer ne sait pas piloter. Une capacité illisible — pilote trop
+    ancien pour la requête, `N/A` — ne bloque rien : on ne renonce à une carte que sur
+    une réponse claire. Et une seule carte utilisable suffit à garder le mode CUDA.
+    """
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return None
+    try:
+        done = subprocess.run([exe, "--query-gpu=name,compute_cap", "--format=csv,noheader"],
+                              capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    oldest = None
+    for line in (done.stdout or "").splitlines():
+        name, _, capability = line.partition(",")
+        try:
+            parsed = tuple(int(part) for part in capability.strip().split("."))
+        except ValueError:
+            continue
+        if parsed >= CUDA_MIN_CAPABILITY:
+            return None
+        if oldest is None or parsed > oldest[1]:
+            oldest = (name.strip(), parsed)
+    return (oldest[0], ".".join(str(part) for part in oldest[1])) if oldest else None
+
+
 def total_ram() -> int:
     """RAM physique en octets, ou 0 si la plateforme ne sait pas la dire.
 
@@ -559,11 +602,27 @@ def preflight(args) -> tuple[str, str]:
               found=platform.python_version()))
     ok(t("pre.python", version=platform.python_version(), executable=sys.executable))
     ok(t("pre.platform", system=platform.system(), machine=platform.machine()))
+    # Un Mac Intel n'a ni Metal utilisable par torch, ni build x86_64 publiée depuis la
+    # 2.2 : l'installation ira au bout, le moteur peut très bien ne pas démarrer. On
+    # prévient sans interdire — c'est la machine de quelqu'un, pas la nôtre.
+    if sys.platform == "darwin" and platform.machine() != "arm64":
+        warn(t("pre.mac_intel"))
 
     accelerator = detect_accelerator()
+    # Une carte trop ancienne n'est pas une carte : la déclasser ici, et tout ce qui
+    # suit — variante, index PyTorch, arguments de ComfyUI — suit sans cas particulier.
+    if accelerator == "cuda":
+        old_card = nvidia_too_old()
+        if old_card:
+            warn(t("pre.cuda_too_old", name=old_card[0], cap=old_card[1],
+                   minimum=".".join(str(part) for part in CUDA_MIN_CAPABILITY)))
+            accelerator = "cpu"
+
     variant = args.variant or variant_for(accelerator)
     ok(t("pre.accelerator", accelerator=accelerator, variant=t(f"variant.{variant}"))
        + (t("pre.forced") if args.variant else ""))
+    if args.variant == "quantized" and accelerator != "cuda":
+        warn(t("pre.variant_eager"))
 
     # Le dire ici, pas au récapitulatif : c'est avant vingt minutes de
     # téléchargement qu'on veut savoir que la machine générera sur son processeur.
@@ -575,6 +634,14 @@ def preflight(args) -> tuple[str, str]:
             ram = total_ram()
             say("    " + t("pre.cpu_bf16",
                            ram=human(ram) if ram else t("pre.cpu_ram_unknown")))
+    else:
+        # Sur GPU, les poids passent quand même par la RAM, et la mémoire unifiée d'un
+        # Mac EST la RAM. Personne ne peut rien y faire ici : on prévient, c'est tout.
+        ram, weights = total_ram(), total_download(variant)
+        # Le message annonce le poids des modèles, la condition y ajoute la marge :
+        # afficher la somme laisserait croire que les poids pèsent 4 Go de plus.
+        if ram and ram < weights + RAM_MARGIN:
+            warn(t("pre.ram_short", ram=human(ram), needed=human(weights)))
 
     # Modèles + ComfyUI (portable extrait ~10 Go, ou venv torch ~8 Go) + marge.
     needed = total_download(variant) + 12_000_000_000
