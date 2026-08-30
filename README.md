@@ -1,157 +1,195 @@
 # comfyui-zimage
 
-Générez des images sur votre ordinateur, sans compte, sans abonnement et sans envoyer
-quoi que ce soit sur Internet. Vous décrivez ce que vous voulez, l'image apparaît.
+**English** · [Français](README.fr.md)
 
-Tout s'installe tout seul : vous lancez l'installateur, vous attendez, et c'est prêt.
-Fonctionne sous **Windows, Linux et macOS**.
+Generate images on your own computer — no account, no subscription, and nothing sent
+over the internet. You describe what you want, the image appears.
+
+Everything installs itself: you start the installer, you wait, and it is ready. Runs on
+**Windows, Linux and macOS**, and speaks **thirteen languages** — installer and studio
+alike.
 
 ---
 
-## Avant de commencer
+## Before you start
 
-| Il vous faut | Détail |
+| You need | Details |
 |---|---|
-| **Python 3.10 ou plus récent** | [python.org/downloads](https://www.python.org/downloads/) — sous Windows, cochez « Add python.exe to PATH » |
-| **~25 Go d'espace libre** | ComfyUI et les modèles d'image |
-| **Une carte graphique** | NVIDIA (8 Go de mémoire vidéo ou plus) ou un Mac Apple Silicon. Sans carte, ça fonctionne mais chaque image prend plusieurs minutes |
-| **Une bonne connexion** | environ 15 Go à télécharger, une seule fois |
+| **Python 3.10 or newer** | [python.org/downloads](https://www.python.org/downloads/) — on Windows, tick "Add python.exe to PATH" |
+| **~25 GB of free space** | ComfyUI and the image models |
+| **A graphics card** | NVIDIA (8 GB of video memory or more) or an Apple Silicon Mac. Without one everything still works on the processor, but an image then takes tens of minutes instead of seconds, and 32 GB of RAM are needed |
+| **A decent connection** | about 15 GB to download, once |
 
 ---
 
-## 1. Installer
+## 1. Install
 
-Récupérez le projet, puis lancez l'installateur.
+Get the project, then start the installer.
 
-**Windows** — double-cliquez sur `install.bat`.
+**Windows** — double-click `install.bat`.
 
-**Linux / macOS** — dans un terminal :
+**Linux / macOS** — in a terminal:
 
 ```bash
 ./install.sh
 ```
 
-Comptez **20 minutes à une heure** selon votre connexion. L'installateur affiche sa
-progression et vous dit ce qu'il fait.
+Expect **20 minutes to an hour** depending on your connection. The installer shows its
+progress and tells you what it is doing.
 
-> **Interrompu ?** Relancez-le simplement. Il reprend là où il s'était arrêté et ne
-> retélécharge rien de ce qui est déjà là.
+> **Interrupted?** Just start it again. It picks up where it left off and re-downloads
+> nothing that is already there.
 
-Il vous posera une seule question, à propos d'**Ollama** : un logiciel qui traduit
-automatiquement vos descriptions en anglais avant de les envoyer au générateur
-d'images, qui comprend beaucoup mieux cette langue. C'est **facultatif** — vous pouvez
-répondre non et l'ajouter plus tard en relançant l'installateur. Sans lui, écrivez vos
-descriptions en anglais pour de meilleurs résultats.
+It will ask you three questions.
+
+**The language**, first. The installer settles on your computer's own language and
+lists the thirteen it speaks: press `Enter` to keep it, or type a number to switch. To
+decide in advance: `install.bat --lang de` (or `./install.sh --lang de`).
+
+**Ollama**, then: a program that automatically translates your descriptions into
+English before they reach the image generator, which understands that language far
+better. It is **optional** — you can say no and add it later by running the installer
+again. Without it, write your descriptions in English for better results.
+
+**Starting the studio**, finally, once everything is in place: answering yes launches
+it straight away, and you have nothing else to open.
+
+> **Unattended?** `install.bat --yes` accepts every default and asks nothing — the
+> system language is then used without a prompt, and the studio starts on its own.
+> `--no-run` installs without starting anything.
 
 ---
 
-## 2. Lancer
+## 2. Run
 
-**Windows** — double-cliquez sur `run.bat`.
+**Windows** — double-click `run.bat`.
 **Linux / macOS** — `./run.sh`
 
-Votre navigateur s'ouvre sur le studio. Laissez la fenêtre noire (la console) ouverte
-tant que vous utilisez le studio : c'est elle qui fait tourner le moteur. Pour tout
-arrêter, fermez-la ou appuyez sur `Ctrl+C`.
+Your browser opens on the studio. Leave the black window (the console) open while you
+use the studio: it is what keeps the engine running. To stop everything, close it or
+press `Ctrl+C`.
 
-> **La toute première image prend 20 à 30 secondes** : le moteur charge ses modèles.
-> Les suivantes arrivent en quelques secondes.
+> **The very first image takes 20 to 30 seconds**: the engine is loading its models.
+> The next ones arrive in a few seconds.
 
----
-
-## 3. Créer des images
-
-Décrivez votre image dans la barre du bas, puis **Générer**.
-
-- **Largeur et hauteur** — indépendantes, de 256 à 2048 pixels. Elles sont ajustées
-  au multiple de 16 le plus proche (une contrainte du générateur).
-- **Variantes** — de 1 à 4 images d'affilée à partir de la même description. Chacune
-  a sa barre de progression et sa croix pour l'annuler si elle ne vous plaît pas.
-- **Langue** (en haut à droite) — traduit l'interface, et indique dans quelle langue
-  vous écrivez vos descriptions. Treize langues disponibles.
-
-Plus votre description est précise, meilleur est le résultat. Pensez au sujet, au
-décor, à la lumière et au style : *« un chat noir endormi sur un canapé de velours
-rouge, lumière douce du matin, photographie »* donne mieux que *« un chat »*.
-
-### La galerie
-
-Le bouton **☰** en haut à gauche ouvre vos images, rangées par jour. Cliquez sur un
-jour pour le déplier, sur une image pour l'agrandir.
-
-Une fois l'image agrandie, vous pouvez la **télécharger**, la **supprimer** (deux
-clics, pour éviter l'accident), ou **réutiliser ses réglages** — la description et le
-format reviennent dans la barre du bas, prêts pour une variation.
-
-La recherche trouve vos images à partir des mots de votre description, dans votre
-langue, même si l'image a été générée à partir d'une traduction anglaise.
-
-Vos images sont enregistrées dans le dossier `media/` du projet, classées par date.
-Rien n'est envoyé ailleurs.
+The installer offers to do this for you at the end, so the first time you have nothing
+to launch by hand.
 
 ---
 
-## Si quelque chose ne va pas
+## 3. Create images
 
-**« Python 3.10+ est introuvable »** — installez Python depuis
-[python.org](https://www.python.org/downloads/) en cochant bien « Add python.exe to
-PATH », puis relancez l'installateur.
+Describe your image in the bar at the bottom, then **Generate**.
 
-**Le navigateur ne s'ouvre pas** — allez à [http://127.0.0.1:8000](http://127.0.0.1:8000)
-manuellement.
+- **Width and height** — independent, from 256 to 2048 pixels. They are rounded to the
+  nearest multiple of 16 (a constraint of the generator).
+- **Variants** — 1 to 4 images in a row from the same description. Each has its own
+  progress bar and its own cross to cancel it if you don't like where it is going.
+- **Language** (top right) — translates the interface, and states which language you
+  write your descriptions in. Thirteen languages available.
 
-**« ComfyUI n'a pas répondu »** — le moteur n'a pas démarré. Le fichier
-`logs/comfyui.log` en donne la raison. Le plus souvent : pas assez de mémoire vidéo,
-ou une installation incomplète — relancer l'installateur répare.
+The more precise your description, the better the result. Think about the subject, the
+setting, the light and the style: *"a black cat asleep on a red velvet sofa, soft
+morning light, photograph"* beats *"a cat"*.
 
-**Les images sont très lentes, ou le studio plante en cours de génération** — votre
-carte manque de mémoire. Ouvrez `config.ini` et remplacez la ligne `extra_args =`
-par :
+### The gallery
+
+The **☰** button at the top left opens your images, filed by day. Click a day to
+unfold it, an image to enlarge it.
+
+Once an image is enlarged, you can **download** it, **delete** it (two clicks, to avoid
+accidents), or **reuse its settings** — the description and the size come back into the
+bar at the bottom, ready for a variation.
+
+Search finds your images from the words of your description, in your own language, even
+when the image was generated from an English translation.
+
+Your images are saved in the project's `media/` folder, filed by date. Nothing is sent
+anywhere.
+
+---
+
+## If something goes wrong
+
+**"Python 3.10+ not found"** — install Python from
+[python.org](https://www.python.org/downloads/), making sure to tick "Add python.exe to
+PATH", then start the installer again.
+
+**The browser doesn't open** — go to [http://127.0.0.1:8000](http://127.0.0.1:8000)
+yourself.
+
+**"ComfyUI did not answer"** — the engine did not start. The file `logs/comfyui.log`
+says why. Most often: not enough video memory, or an incomplete installation — running
+the installer again repairs it.
+
+**Images are very slow, or the studio crashes mid-generation** — your card is short on
+memory. Open `config.ini` and replace the `extra_args =` line with:
 
 ```ini
 extra_args = --reserve-vram 2
 ```
 
-**Mes descriptions ne sont pas traduites** — Ollama n'est pas installé ou pas démarré.
-Ce n'est pas grave : écrivez en anglais, ou relancez l'installateur pour l'ajouter.
+**`logs/comfyui.log` ends with "access violation" or "CUDA not available"** — the engine
+was started expecting a graphics card it cannot use. The installer writes what is needed
+into `config.ini` when it sees no usable card; if the `extra_args =` line is empty, fill
+it in yourself, then start again:
 
-**Une erreur qui ne figure pas ici** — le dossier `logs/` contient les journaux du
-moteur (`comfyui.log`) ; c'est là que se trouve l'explication.
+```ini
+extra_args = --cpu --disable-cuda-malloc
+```
+
+Add `--bf16-unet` to that line if the machine has less than 24 GB of RAM — otherwise the
+model is loaded at full precision and asks for about 24 GB on its own.
+
+**My descriptions are not translated** — Ollama is not installed or not running. No
+harm done: write in English, or run the installer again to add it.
+
+**An error that isn't listed here** — the `logs/` folder holds the engine's logs
+(`comfyui.log`); that is where the explanation is.
 
 ---
 
-## Aller plus loin
+## Going further
 
-**Brancher un assistant IA.** Le fichier `mcp_server.py` permet à un assistant
-compatible MCP (Claude Code, Claude Desktop) de générer des images pour vous. La
-configuration à lui donner :
+**Plugging in an AI assistant.** The file `mcp_server.py` lets an MCP-compatible
+assistant (Claude Code, Claude Desktop) generate images for you. The configuration to
+give it:
 
 ```json
 {
   "mcpServers": {
     "comfyui-zimage": {
-      "command": "<chemin du projet>/venv/Scripts/python.exe",
-      "args": ["<chemin du projet>/mcp_server.py"]
+      "command": "<project path>/venv/Scripts/python.exe",
+      "args": ["<project path>/mcp_server.py"]
     }
   }
 }
 ```
 
-Sous Linux et macOS, remplacez `venv/Scripts/python.exe` par `venv/bin/python`. Les
-images ainsi créées apparaissent dans votre galerie.
+On Linux and macOS, replace `venv/Scripts/python.exe` with `venv/bin/python`. Images
+created this way show up in your gallery.
 
-**Découper une image sur fond transparent.** Le projet embarque de quoi générer un
-personnage ou un objet puis le détourer proprement en PNG transparent : voir
-[.claude/skills/asset-detoure/](.claude/skills/asset-detoure/).
+**Cutting an image out on a transparent background.** The project ships what it takes
+to generate a character or an object and then cut it out cleanly into a transparent
+PNG: see [.claude/skills/asset-detoure/](.claude/skills/asset-detoure/).
 
-**Régler le studio.** Le fichier `config.ini`, créé par l'installateur, contient les
-chemins et les quelques réglages modifiables ; `config.ini.example` explique chaque
-ligne.
+**Tuning the studio.** The `config.ini` file, written by the installer, holds the paths
+and the few adjustable settings; `config.ini.example` explains every line.
+
+**Adding a language.** The thirteen languages are declared in a single place,
+`studio/i18n.py`. Adding one takes three things: a line in that file, a
+`locales/<code>.json` for the installer, a `studio/static/i18n/<code>.json` for the
+studio. The command below compares both catalogues against English and reports any
+missing key or misspelled field:
+
+```bash
+venv/Scripts/python.exe -m studio.i18n --check
+```
 
 ---
 
-## Ce que ce projet ne fait pas
+## What this project does not do
 
-Il ne fait qu'une chose : **créer des images à partir de texte**. Pas de retouche, pas
-de vidéo, pas de modèles supplémentaires à gérer. C'est délibéré : un outil qui marche
-dès la première minute, plutôt qu'un atelier complet à configurer.
+It does one thing: **create images from text**. No retouching, no video, no extra
+models to manage. That is deliberate — a tool that works within the first minute,
+rather than a full workshop to configure.

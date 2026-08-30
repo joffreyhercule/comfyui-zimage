@@ -14,6 +14,9 @@ for %%P in ("py -3" "python") do (
     )
 )
 if not defined PY (
+    REM Le seul message qu'aucun Python ne peut traduire, faute de Python.
+    echo Python 3.10+ not found. Install it from https://www.python.org/downloads/
+    echo with "Add python.exe to PATH" ticked, then run install.bat again.
     echo Python 3.10+ est introuvable. Installez-le depuis https://www.python.org/downloads/
     echo en cochant "Add python.exe to PATH", puis relancez install.bat.
     pause
@@ -21,15 +24,24 @@ if not defined PY (
 )
 
 if not exist "venv\Scripts\python.exe" (
-    echo Creation du venv...
-    %PY% -m venv venv || (echo Echec de la creation du venv. & pause & exit /b 1)
+    call :say boot.venv "Creating the virtual environment..."
+    %PY% -m venv venv || (call :say boot.venv_failed "Could not create the virtual environment." & pause & exit /b 1)
 )
 
-echo Installation des prerequis de l'installateur...
+call :say boot.prereq "Installing the installer's prerequisites..."
 "venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q --upgrade pip
-"venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q httpx py7zr || (echo Echec pip. & pause & exit /b 1)
+"venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q httpx py7zr || (call :say boot.pip_failed "pip failed." & pause & exit /b 1)
 
 "venv\Scripts\python.exe" install.py %*
 set "CODE=%ERRORLEVEL%"
 pause
 exit /b %CODE%
+
+REM Trois messages, dans la langue du systeme. Le .bat ne sait ni lire un JSON ni
+REM deviner une locale : il delegue au module i18n, avec l'anglais en repli si le
+REM module manque ou se tait.
+:say
+set "MSG=%~2"
+for /f "usebackq delims=" %%M in (`%PY% -m studio.i18n %1 2^>nul`) do set "MSG=%%M"
+echo %MSG%
+exit /b 0

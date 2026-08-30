@@ -16,8 +16,12 @@ output_dir = comfyui/ComfyUI/output
 managed = true
 ; Arguments supplémentaires passés à ComfyUI, séparés par des espaces.
 ; Sous 16 Go de VRAM, --reserve-vram 2 laisse de la place à Ollama.
+; Sans accélérateur utilisable, install.py y pose --cpu --disable-cuda-malloc,
+; plus --bf16-unet sous 24 Go de RAM. Une valeur déjà là n'est jamais écrasée.
 extra_args =
 ; Délai maximal d'un job, en secondes (premier chargement à froid inclus).
+; 3600 sur une installation qui génère sur le processeur : une image y prend des
+; dizaines de minutes, et 900 couperait des jobs qui avancent normalement.
 job_timeout = 900
 
 [server]

@@ -14,51 +14,12 @@ from studio.config import (
     OLLAMA_TRANSLATE_MODEL,
     OLLAMA_URL,
 )
+# Les treize langues vivent dans `studio/i18n.py`, seul module que l'installateur
+# puisse importer avant d'avoir installé quoi que ce soit. On les réexporte ici :
+# `main.py` et le reste du studio continuent de les lire depuis `translate`.
+from studio.i18n import LANGUAGES, NATIVE_NAMES, RTL_LANGUAGES  # noqa: F401
 
 logger = logging.getLogger(__name__)
-
-#: Les treize langues de l'interface. Le code sert de clé i18n, de langue source
-#: présumée du prompt, et d'attribut `lang` du document HTML.
-LANGUAGES: dict[str, str] = {
-    "en": "English",
-    "fr": "French",
-    "es": "Spanish",
-    "de": "German",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "nl": "Dutch",
-    "pl": "Polish",
-    "ru": "Russian",
-    "ja": "Japanese",
-    "zh": "Chinese",
-    "ko": "Korean",
-    "ar": "Arabic",
-}
-
-#: Le nom de chaque langue DANS cette langue, pour le sélecteur et la galerie.
-#: Distinct de `LANGUAGES`, qui porte les noms anglais parce que c'est ce que le
-#: prompt système de traduction attend. Un sélecteur en noms natifs se lit même
-#: quand l'interface est dans une langue qu'on ne connaît pas — c'est justement le
-#: moment où on en a besoin.
-NATIVE_NAMES: dict[str, str] = {
-    "en": "English",
-    "fr": "Français",
-    "es": "Español",
-    "de": "Deutsch",
-    "it": "Italiano",
-    "pt": "Português",
-    "nl": "Nederlands",
-    "pl": "Polski",
-    "ru": "Русский",
-    "ja": "日本語",
-    "zh": "中文",
-    "ko": "한국어",
-    "ar": "العربية",
-}
-
-#: L'arabe est la seule langue de la liste écrite de droite à gauche. Le front s'en
-#: sert pour basculer `document.documentElement.dir`.
-RTL_LANGUAGES = frozenset({"ar"})
 
 
 def _system_prompt(lang: str) -> str:

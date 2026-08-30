@@ -9,8 +9,12 @@ réutilisée sans rien copier.
 Il est appelé par `install.bat` / `install.sh` avec le Python du venv du projet, qui
 n'a alors que httpx (et py7zr sous Windows) : l'étape 1 installe le reste.
 
-    python install.py [--variant quantized|bf16] [--comfy-dir CHEMIN]
-                      [--install-ollama | --no-ollama] [--yes]
+Il parle les treize langues de l'interface. La langue du système est retenue
+d'office ; le sélecteur d'ouverture ne fait que permettre d'en changer, et ne
+s'affiche que sur un terminal interactif — `--lang` et `--yes` le sautent.
+
+    python install.py [--lang CODE] [--variant quantized|bf16] [--comfy-dir CHEMIN]
+                      [--install-ollama | --no-ollama] [--no-run] [--yes]
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 from pathlib import Path
 
 import httpx
@@ -32,6 +37,14 @@ import httpx
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 from studio.comfy.layout import comfy_models_dir, resolve_comfy_layout  # noqa: E402
+from studio.i18n import (  # noqa: E402
+    LANGUAGES,
+    NATIVE_NAMES,
+    detect_system_language,
+    load as load_language,
+    normalize as normalize_language,
+    t,
+)
 
 
 # ---------- Constantes ----------
@@ -78,6 +91,25 @@ TORCH_INDEX = {
     "mps": None,  # les wheels par défaut embarquent MPS
 }
 
+# Le portable Windows n'existe qu'en build NVIDIA, et une installation source suit
+# l'accélérateur détecté : hors CUDA, le torch en place n'a aucun GPU à qui parler.
+# Sans `--cpu`, ComfyUI appelle `torch.cuda.current_device()` dès l'import de
+# `model_management` et meurt en violation d'accès, avant même d'ouvrir son port.
+CPU_ARGS = ("--cpu", "--disable-cuda-malloc")
+
+# En mode CPU, ComfyUI refuse le fp16 comme le bf16 — `should_use_fp16` et
+# `should_use_bf16` rendent False sur un device CPU — et charge donc l'UNet en
+# fp32 : les 12,3 Go du bf16 en réclament ~24,6 en mémoire, d'un seul bloc, le
+# mode CPU désactivant aussi le chargement partiel. En dessous de ce seuil,
+# `--bf16-unet` force la moitié : plus lent, faute d'instructions bf16 sur un x86
+# grand public, mais c'est la seule version qui tienne en mémoire.
+CPU_FP32_MIN_RAM = 24_000_000_000
+CPU_BF16_ARG = "--bf16-unet"
+
+# Une image en 1024² se compte en dizaines de minutes sur un processeur : le
+# garde-fou des 15 minutes couperait des jobs qui avancent normalement.
+CPU_JOB_TIMEOUT = "3600"
+
 OLLAMA_URL = "http://127.0.0.1:11434"
 TRANSLATE_MODEL = "translategemma:latest"
 OLLAMA_PATHS = (
@@ -113,6 +145,33 @@ def _encodable(text: str) -> bool:
         return False
 
 
+def display_width(text: str) -> int:
+    """Largeur d'un texte en colonnes de terminal, pas en points de code.
+
+    `完了` occupe deux cellules par caractère. Compter avec `len()` ferait déborder
+    chaque ligne réécrite sur place — barres de progression comprises, qui
+    laisseraient alors une traînée à droite.
+    """
+    return sum(2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+               for char in text)
+
+
+def pad(text: str, width: int) -> str:
+    return text + " " * max(0, width - display_width(text))
+
+
+def clip(text: str, width: int) -> str:
+    """Tronque à `width` colonnes, sans jamais couper au milieu d'une cellule."""
+    total, kept = 0, []
+    for char in text:
+        step = 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+        if total + step > width:
+            break
+        kept.append(char)
+        total += step
+    return "".join(kept)
+
+
 BAR_FILL, BAR_EMPTY = ("█", "░") if _encodable("█░") else ("#", "-")
 SPIN_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" if _encodable("⠋") else "|/-\\"
 BAR_WIDTH = 26
@@ -144,7 +203,7 @@ def render(label: str, fraction: float, detail: str = "") -> None:
     line = f"    {bar(fraction)} {100 * fraction:5.1f}%  {label}"
     if detail:
         line += f"  {detail}"
-    print("\r" + line[:LINE_WIDTH].ljust(LINE_WIDTH), end="", flush=True)
+    print("\r" + pad(clip(line, LINE_WIDTH), LINE_WIDTH), end="", flush=True)
 
 
 def title(step: int, text: str) -> None:
@@ -154,7 +213,8 @@ def title(step: int, text: str) -> None:
     _current_step = step
     say("")
     head = f"=== [{step}/{TOTAL_STEPS}] {text} "
-    say(head.ljust(LINE_WIDTH - BAR_WIDTH - 10, "=")
+    rule = "=" * max(0, LINE_WIDTH - BAR_WIDTH - 10 - display_width(head))
+    say(head + rule
         + f" {bar(step / TOTAL_STEPS, BAR_WIDTH)} {100 * step // TOTAL_STEPS:3d}%")
 
 
@@ -168,27 +228,38 @@ def warn(text: str) -> None:
 
 def die(text: str) -> None:
     say("")
-    say(f"ARRET : {text}")
+    say(t("abort", message=text))
     sys.exit(1)
 
 
 def human(n: float) -> str:
-    """Taille lisible. Unités décimales, comme celles annoncées par Hugging Face."""
-    for unit in ("o", "ko", "Mo", "Go"):
-        if abs(n) < 1000 or unit == "Go":
-            return f"{n:.0f} {unit}" if unit == "o" else f"{n:.1f} {unit}"
+    """Taille lisible. Unités décimales, comme celles annoncées par Hugging Face.
+
+    L'unité et la virgule décimale viennent des chaînes : `1.5 GB` en anglais,
+    `1,5 Go` en français, `1.5 ГБ` en russe.
+    """
+    units = (t("unit.b"), t("unit.kb"), t("unit.mb"), t("unit.gb"))
+    for index, unit in enumerate(units):
+        if abs(n) < 1000 or index == len(units) - 1:
+            text = f"{n:.0f} {unit}" if index == 0 else f"{n:.1f} {unit}"
+            return text.replace(".", t("format.decimal"))
         n /= 1000
-    return f"{n:.1f} Go"
+    return f"{n:.1f} {units[-1]}"
 
 
 def duration(seconds: float) -> str:
-    """Durée courte : `42 s`, `3 min 07 s`, `1 h 12 min`."""
+    """Durée courte : `42 s`, `3 min 07 s`, `1 h 12 min`.
+
+    Le remplissage à deux chiffres est fait ici, pas dans le gabarit : une chaîne
+    traduite n'a pas à porter de spécificateur de format que le traducteur pourrait
+    casser.
+    """
     seconds = int(max(0, seconds))
     if seconds < 60:
-        return f"{seconds} s"
+        return t("dur.s", s=seconds)
     if seconds < 3600:
-        return f"{seconds // 60} min {seconds % 60:02d} s"
-    return f"{seconds // 3600} h {(seconds % 3600) // 60:02d} min"
+        return t("dur.ms", m=seconds // 60, s=f"{seconds % 60:02d}")
+    return t("dur.hm", h=seconds // 3600, m=f"{(seconds % 3600) // 60:02d}")
 
 
 class Spinner:
@@ -213,7 +284,8 @@ class Spinner:
             while not self._stop.wait(0.12):
                 frame = SPIN_FRAMES[index % len(SPIN_FRAMES)]
                 elapsed = duration(time.monotonic() - self.started)
-                print(f"\r    {frame} {self.label}   {elapsed}".ljust(LINE_WIDTH),
+                print("\r" + pad(clip(f"    {frame} {self.label}   {elapsed}",
+                                      LINE_WIDTH), LINE_WIDTH),
                       end="", flush=True)
                 index += 1
 
@@ -295,22 +367,24 @@ def remove_tree(path: Path) -> None:
     else:  # `onexc` n'existe pas avant 3.12
         shutil.rmtree(path, onerror=lambda f, p, e: force(f, p, e))
     if path.exists():
-        die(f"impossible de supprimer {path} — un programme le tient peut-être "
-            "ouvert (explorateur, antivirus, ComfyUI en cours). Fermez-le et relancez.")
+        die(t("comfy.remove_failed", path=path))
 
 
 def ask_yes_no(question: str, default: bool, assume: bool | None = None) -> bool:
     """Question fermée. `assume` court-circuite (drapeaux non interactifs), et une
     entrée fermée (pipe, CI) retombe sur le défaut au lieu de lever EOFError."""
     if assume is not None:
-        say(f"{question} {'oui' if assume else 'non'} (imposé en ligne de commande)")
+        say(t("prompt.forced", question=question,
+              answer=t("prompt.yes") if assume else t("prompt.no")))
         return assume
-    suffix = "[O/n]" if default else "[o/N]"
+    suffix = t("prompt.suffix_yes") if default else t("prompt.suffix_no")
     try:
         answer = input(f"{question} {suffix} ").strip().lower()
     except EOFError:
         return default
-    return answer[0] in ("o", "y") if answer else default
+    # Chaque langue liste ses lettres d'accord, `y` compris : sur un clavier
+    # quelconque, c'est la touche que tout le monde essaie.
+    return answer[0] in t("prompt.yes_letters") if answer else default
 
 
 def ask_text(question: str, skip: bool = False) -> str:
@@ -320,6 +394,50 @@ def ask_text(question: str, skip: bool = False) -> str:
         return input(f"{question} ").strip().strip('"').strip("'")
     except EOFError:
         return ""
+
+
+# ---------- Langue ----------
+
+def language_label(code: str) -> str:
+    """Le nom natif si la console sait l'écrire, le nom anglais sinon.
+
+    Une console restée en cp437 afficherait `???` en face de 3, 10 et 13 : autant
+    proposer `Japanese` que trois points d'interrogation."""
+    native = NATIVE_NAMES[code]
+    return native if _encodable(native) else LANGUAGES[code]
+
+
+def choose_language(default: str) -> str:
+    """Sélecteur d'ouverture : les treize langues, celle du système présélectionnée.
+
+    La détection décide, l'invite ne fait que laisser changer d'avis — d'où la
+    validation par simple `Entrée`. On accepte le numéro comme le code, parce que
+    quelqu'un qui cherche sa langue tape aussi bien `3` que `es`.
+    """
+    codes = list(NATIVE_NAMES)
+    rows = -(-len(codes) // 3)  # trois colonnes, remplies verticalement
+    width = max(display_width(language_label(code)) for code in codes) + 6
+
+    say("")
+    say(f"  {t('lang.title')}")
+    for row in range(rows):
+        cells = []
+        for column in range(3):
+            index = column * rows + row
+            if index < len(codes):
+                cells.append(pad(f"{index + 1:>2}. {language_label(codes[index])}", width))
+        say("    " + "".join(cells).rstrip())
+
+    prompt = t("lang.hint", count=len(codes), default=language_label(default))
+    try:
+        answer = input(f"  {prompt} ").strip().lower()
+    except EOFError:
+        return default
+    if not answer:
+        return default
+    if answer.isdigit() and 1 <= int(answer) <= len(codes):
+        return codes[int(answer) - 1]
+    return normalize_language(answer) or default
 
 
 # ---------- 0. Préflight ----------
@@ -349,6 +467,60 @@ def variant_for(accelerator: str) -> str:
     return "quantized" if accelerator == "cuda" else "bf16"
 
 
+def total_ram() -> int:
+    """RAM physique en octets, ou 0 si la plateforme ne sait pas la dire.
+
+    Sans psutil : l'installateur ne dépend que de la bibliothèque standard tant que
+    l'étape 1 n'a pas posé les requirements, et cette mesure sert dès le préflight.
+    """
+    if IS_WINDOWS:
+        import ctypes
+
+        class _MemoryStatus(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong),
+                        ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong),
+                        ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong),
+                        ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong),
+                        ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+        status = _MemoryStatus()
+        status.dwLength = ctypes.sizeof(_MemoryStatus)
+        try:
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+                return int(status.ullTotalPhys)
+        except (AttributeError, OSError):
+            pass
+        return 0
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, ValueError, OSError):
+        return 0
+
+
+def cpu_mode_args(accelerator: str) -> list[str]:
+    """Les arguments que ComfyUI exige sur cette machine, ou une liste vide.
+
+    Vide veut dire « le GPU répond » : CUDA partout, ROCm et MPS sur une installation
+    source, qui a reçu le torch correspondant. Sous Windows il n'y a pas d'autre cas
+    que CUDA — le portable est une build NVIDIA, et qu'un Radeon ou un Arc soit
+    présent ne change rien à ce que son torch sait piloter.
+    """
+    gpu_ready = accelerator == "cuda" or (
+        not IS_WINDOWS and accelerator in ("rocm", "mps"))
+    if gpu_ready:
+        return []
+    arguments = list(CPU_ARGS)
+    # RAM inconnue : on choisit le pire cas. Le bf16 ne coûte que du temps, le fp32
+    # sur une machine trop juste coûte l'installation entière.
+    if total_ram() < CPU_FP32_MIN_RAM:
+        arguments.append(CPU_BF16_ARG)
+    return arguments
+
+
 def refine_variant(python: Path, variant: str, forced: bool) -> str:
     """Vérifie sur le torch réellement installé que l'int8 a bien un backend.
 
@@ -368,10 +540,10 @@ def refine_variant(python: Path, variant: str, forced: bool) -> str:
     cuda = lines[-1] if lines else ""
     major = int(cuda.split(".")[0]) if cuda[:1].isdigit() else 0
     if major >= 13:
-        ok(f"torch CUDA {cuda} — variante quantifiée confirmée")
+        ok(t("pre.cuda_ok", cuda=cuda))
         return "quantized"
-    warn(f"torch CUDA « {cuda or 'absent'} » < 13 : pas de backend int8, bascule en bf16")
-    warn("--variant quantized force la main si votre pile sait faire de l'int8")
+    warn(t("pre.cuda_old", cuda=cuda or t("pre.cuda_absent")))
+    warn(t("pre.cuda_hint"))
     return "bf16"
 
 
@@ -381,38 +553,48 @@ def total_download(variant: str) -> int:
 
 
 def preflight(args) -> tuple[str, str]:
-    title(0, "Préflight")
+    title(0, t("step.preflight"))
     if sys.version_info < PY_MIN:
-        die(f"Python {PY_MIN[0]}.{PY_MIN[1]}+ requis, trouvé {platform.python_version()}")
-    ok(f"Python {platform.python_version()} — {sys.executable}")
-    ok(f"Plateforme {platform.system()} {platform.machine()}")
+        die(t("pre.python_old", minimum=f"{PY_MIN[0]}.{PY_MIN[1]}",
+              found=platform.python_version()))
+    ok(t("pre.python", version=platform.python_version(), executable=sys.executable))
+    ok(t("pre.platform", system=platform.system(), machine=platform.machine()))
 
     accelerator = detect_accelerator()
     variant = args.variant or variant_for(accelerator)
-    label = "quantifiée (int8/fp8)" if variant == "quantized" else "bf16 (pleine précision)"
-    ok(f"Accélérateur {accelerator} → variante {label}"
-       + (" [imposée]" if args.variant else ""))
+    ok(t("pre.accelerator", accelerator=accelerator, variant=t(f"variant.{variant}"))
+       + (t("pre.forced") if args.variant else ""))
+
+    # Le dire ici, pas au récapitulatif : c'est avant vingt minutes de
+    # téléchargement qu'on veut savoir que la machine générera sur son processeur.
+    cpu_arguments = cpu_mode_args(accelerator)
+    if cpu_arguments:
+        warn(t("pre.cpu_mode", args=" ".join(cpu_arguments)))
+        say("    " + t("pre.cpu_slow"))
+        if CPU_BF16_ARG in cpu_arguments:
+            ram = total_ram()
+            say("    " + t("pre.cpu_bf16",
+                           ram=human(ram) if ram else t("pre.cpu_ram_unknown")))
 
     # Modèles + ComfyUI (portable extrait ~10 Go, ou venv torch ~8 Go) + marge.
     needed = total_download(variant) + 12_000_000_000
     free = shutil.disk_usage(ROOT).free
     if free < needed:
-        die(f"espace libre insuffisant sur {ROOT.anchor} : {human(free)} disponibles, "
-            f"{human(needed)} nécessaires")
-    ok(f"Espace disque : {human(free)} libres, {human(needed)} nécessaires")
+        die(t("pre.disk_short", drive=ROOT.anchor, free=human(free), needed=human(needed)))
+    ok(t("pre.disk", free=human(free), needed=human(needed)))
     return accelerator, variant
 
 
 # ---------- 1. Dépendances du projet ----------
 
 def install_requirements() -> None:
-    title(1, "Dépendances Python du studio")
+    title(1, t("step.deps"))
     req = ROOT / "requirements.txt"
     code = run_spinning([sys.executable, "-m", "pip", "install",
                          "--disable-pip-version-check", "-r", str(req)],
-                        f"pip install -r {req.name}")
+                        t("deps.label", file=req.name))
     if code != 0:
-        die("pip install -r requirements.txt a échoué — voir les messages ci-dessus")
+        die(t("deps.failed"))
 
 
 # ---------- Téléchargement ----------
@@ -433,10 +615,10 @@ def download(url: str, dest: Path, expected_size: int = 0, label: str = "") -> P
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     if dest.exists() and (not expected_size or dest.stat().st_size == expected_size):
-        ok(f"{label} déjà présent ({human(dest.stat().st_size)})")
+        ok(t("dl.present", label=label, size=human(dest.stat().st_size)))
         return dest
     if dest.exists():
-        warn(f"{label} : taille inattendue ({human(dest.stat().st_size)}), retéléchargement")
+        warn(t("dl.bad_size", label=label, size=human(dest.stat().st_size)))
         dest.unlink()
 
     part = dest.with_name(dest.name + ".part")
@@ -446,15 +628,16 @@ def download(url: str, dest: Path, expected_size: int = 0, label: str = "") -> P
         part.unlink()
     headers = {"Range": f"bytes={resume_from}-"} if resume_from else {}
 
-    say(f"  > {label} : {human(expected_size) if expected_size else 'taille inconnue'}"
-        + (f", reprise à {human(resume_from)}" if resume_from else ""))
+    say("  > " + t("dl.start", label=label,
+                   size=human(expected_size) if expected_size else t("dl.unknown_size"))
+        + (t("dl.resume", size=human(resume_from)) if resume_from else ""))
 
     timeout = httpx.Timeout(30.0, read=120.0)
     with httpx.stream("GET", url, headers=headers, follow_redirects=True,
                       timeout=timeout) as response:
         if resume_from and response.status_code == 200:
             # Range ignoré : la réponse repart de zéro, le fragment ne vaut plus rien.
-            warn("le serveur ignore Range, reprise impossible : on repart de zéro")
+            warn(t("dl.no_range"))
             resume_from = 0
         elif resume_from and response.status_code != 206:
             response.raise_for_status()
@@ -476,17 +659,17 @@ def download(url: str, dest: Path, expected_size: int = 0, label: str = "") -> P
                     speed = (written - resume_from) / elapsed
                     remaining = (total - written) / speed if speed and total else 0
                     render(label, written / total if total else 0.0,
-                           f"{human(written)}/{human(total)}  {human(speed)}/s  "
-                           f"reste {duration(remaining)}")
+                           t("dl.progress", done=human(written), total=human(total),
+                             speed=human(speed), remaining=duration(remaining)))
     clear_line()
 
     size = part.stat().st_size
     if expected_size and size != expected_size:
         part.unlink(missing_ok=True)
-        die(f"{label} : {human(size)} reçus au lieu de {human(expected_size)} — "
-            "relancez l'installateur")
+        die(t("dl.mismatch", label=label, got=human(size),
+              expected=human(expected_size)))
     os.replace(part, dest)
-    ok(f"{label} téléchargé ({human(size)})")
+    ok(t("dl.done", label=label, size=human(size)))
     return dest
 
 
@@ -523,9 +706,9 @@ def find_7z() -> tuple[str, list[str]] | None:
     local = ROOT / "7zr.exe"
     if not local.exists():
         try:
-            download(SEVENZR_URL, local, label="7zr.exe (extracteur)")
+            download(SEVENZR_URL, local, label=t("comfy.7zr_label"))
         except Exception as exc:  # réseau, 404, proxy : py7zr prendra le relais
-            warn(f"7zr.exe indisponible ({exc}) — extraction via py7zr")
+            warn(t("comfy.7zr_missing", error=exc))
             return None
     return str(local), [str(local), "x", "-y"]
 
@@ -537,17 +720,17 @@ def extract_7z(archive: Path, dest: Path) -> None:
         exe, base = tool
         # -bsp1 envoie la progression sur stdout : c'est ce qui alimente la barre.
         code = run_with_percent(base + ["-bsp1", f"-o{dest}", str(archive)],
-                                f"extraction de {archive.name}")
+                                t("comfy.extracting", name=archive.name))
         if code == 0:
-            ok(f"{archive.name} extrait")
+            ok(t("comfy.extracted", name=archive.name))
             return
-        warn("l'extracteur externe a échoué, tentative avec py7zr")
+        warn(t("comfy.extract_retry"))
     try:
         import py7zr
     except ImportError:
-        die("aucun extracteur 7z disponible : installez 7-Zip, ou `pip install py7zr`")
+        die(t("comfy.no_extractor"))
     # py7zr n'expose pas de progression exploitable simplement : animation seule.
-    with Spinner(f"extraction de {archive.name} avec py7zr"):
+    with Spinner(t("comfy.extracting_py7zr", name=archive.name)):
         with py7zr.SevenZipFile(archive, mode="r") as archive_file:
             archive_file.extractall(path=dest)
 
@@ -560,16 +743,15 @@ def install_comfy_windows(target: Path) -> None:
         asset = next((a for a in meta.get("assets", [])
                       if a["name"].endswith("_nvidia.7z")), None)
     if asset is None:
-        die("aucune release portable NVIDIA trouvée sur GitHub — "
-            "installez ComfyUI à la main et relancez avec --comfy-dir")
-    ok(f"ComfyUI {meta.get('tag_name', '?')} — {asset['name']}")
+        die(t("comfy.no_release"))
+    ok(t("comfy.release", tag=meta.get("tag_name", "?"), asset=asset["name"]))
 
     archive = ROOT / asset["name"]
     download(asset["browser_download_url"], archive, asset.get("size", 0), asset["name"])
 
     staging = ROOT / "_comfy_extract"
     if staging.exists():
-        with Spinner("nettoyage d'une extraction précédente"):
+        with Spinner(t("comfy.clean_staging")):
             remove_tree(staging)
     extract_7z(archive, staging)
 
@@ -580,7 +762,7 @@ def install_comfy_windows(target: Path) -> None:
         # Une installation précédente incomplète : la destination doit être libre,
         # sinon `rename` la prendrait pour un dossier d'accueil et y imbriquerait
         # l'arborescence (Windows refuse même carrément, en WinError 5).
-        with Spinner(f"nettoyage de {target.name} (installation précédente incomplète)"):
+        with Spinner(t("comfy.clean_target", name=target.name)):
             remove_tree(target)
     try:
         # Même volume : un rename est instantané et atomique. Le repli copie
@@ -589,10 +771,10 @@ def install_comfy_windows(target: Path) -> None:
         # (que la relance détecte comme invalide et refait proprement).
         os.rename(inner, target)
     except OSError as exc:
-        warn(f"déplacement direct impossible ({exc.strerror or exc}), copie en cours")
-        with Spinner(f"copie de ComfyUI vers {target.name}"):
+        warn(t("comfy.move_failed", error=exc.strerror or exc))
+        with Spinner(t("comfy.copying", name=target.name)):
             shutil.copytree(inner, target, dirs_exist_ok=True)
-    with Spinner("nettoyage des fichiers temporaires"):
+    with Spinner(t("comfy.clean_temp")):
         remove_tree(staging)
     archive.unlink(missing_ok=True)
     # L'extracteur téléchargé n'a servi qu'ici : 600 ko qui n'ont pas à traîner à la
@@ -603,20 +785,19 @@ def install_comfy_windows(target: Path) -> None:
 def install_comfy_source(target: Path, accelerator: str) -> None:
     """Clone + venv + torch, pour Linux et macOS où le portable n'existe pas."""
     if not shutil.which("git"):
-        die("git est introuvable : installez-le, ou passez --comfy-dir sur une "
-            "installation existante")
+        die(t("comfy.no_git"))
     if not target.exists():
         if run_spinning(["git", "clone", "--depth", "1", COMFY_GIT, str(target)],
-                        f"git clone {COMFY_GIT}") != 0:
-            die("le clone de ComfyUI a échoué")
+                        t("comfy.clone_label", url=COMFY_GIT)) != 0:
+            die(t("comfy.clone_failed"))
     else:
-        ok("dépôt ComfyUI déjà cloné")
+        ok(t("comfy.cloned"))
 
     venv = target / "venv"
     if not venv.exists():
         if run_spinning([sys.executable, "-m", "venv", str(venv)],
-                        "création du venv ComfyUI") != 0:
-            die("la création du venv de ComfyUI a échoué")
+                        t("comfy.venv_label")) != 0:
+            die(t("comfy.venv_failed"))
     python = venv / "bin" / "python"
     if not python.exists():
         python = venv / "Scripts" / "python.exe"
@@ -625,57 +806,56 @@ def install_comfy_source(target: Path, accelerator: str) -> None:
     torch_cmd = [str(python), "-m", "pip", "install", "torch", "torchvision", "torchaudio"]
     if index:
         torch_cmd += ["--index-url", index]
-    if run_spinning(torch_cmd, f"installation de PyTorch ({accelerator}, plusieurs Go)") != 0:
-        die("l'installation de PyTorch a échoué")
+    if run_spinning(torch_cmd, t("comfy.torch_label", accelerator=accelerator)) != 0:
+        die(t("comfy.torch_failed"))
 
     if run_spinning([str(python), "-m", "pip", "install", "-r",
                      str(target / "requirements.txt")],
-                    "installation des dépendances de ComfyUI") != 0:
-        die("l'installation des dépendances de ComfyUI a échoué")
+                    t("comfy.reqs_label")) != 0:
+        die(t("comfy.reqs_failed"))
 
 
 def setup_comfy(args, accelerator: str, existing_ini: str) -> tuple[Path, Path]:
     """Rend `(racine ComfyUI, dossier models)`. N'installe que si rien n'est trouvé."""
-    title(2, "ComfyUI")
+    title(2, t("step.comfy"))
     for candidate in comfy_candidates(args, existing_ini):
         if resolve_comfy_layout(candidate):
-            ok(f"installation existante réutilisée : {candidate}")
-            say("    (rien n'est copié : les modèles iront dans son propre models/)")
+            ok(t("comfy.reused", path=candidate))
+            say("    " + t("comfy.reused_note"))
             return candidate, comfy_models_dir(candidate)
 
     target = (Path(args.comfy_dir).expanduser().resolve()
               if args.comfy_dir else ROOT / "comfyui")
     if not args.yes:
-        say("  Aucune installation ComfyUI trouvée.")
-        answer = ask_text("  Chemin d'une installation existante, ou Entrée pour installer :")
+        say("  " + t("comfy.none_found"))
+        answer = ask_text("  " + t("comfy.ask_path"))
         if answer:
             candidate = Path(answer).expanduser().resolve()
             if not resolve_comfy_layout(candidate):
-                die(f"{candidate} ne contient ni main.py ni interpréteur ComfyUI")
-            ok(f"installation existante réutilisée : {candidate}")
+                die(t("comfy.invalid", path=candidate))
+            ok(t("comfy.reused", path=candidate))
             return candidate, comfy_models_dir(candidate)
 
-    say(f"  Installation de ComfyUI dans {target}")
+    say("  " + t("comfy.installing", path=target))
     if IS_WINDOWS:
         install_comfy_windows(target)
     else:
         install_comfy_source(target, accelerator)
 
     if not resolve_comfy_layout(target):
-        die(f"installation terminée mais {target} reste invalide (main.py ou "
-            "interpréteur manquant)")
-    ok(f"ComfyUI installé dans {target}")
+        die(t("comfy.still_invalid", path=target))
+    ok(t("comfy.installed", path=target))
     return target, comfy_models_dir(target)
 
 
 # ---------- 3. Modèles ----------
 
 def download_models(models_dir: Path, variant: str) -> dict[str, str]:
-    title(3, f"Modèles Z-Image Turbo — variante {variant}")
+    title(3, t("step.models", variant=variant))
     files = dict(MODEL_VARIANTS[variant])
     files["vae"] = MODEL_VAE
-    say(f"  Destination : {models_dir}")
-    say(f"  Total : {human(total_download(variant))} (déjà téléchargé = sauté)")
+    say("  " + t("models.destination", path=models_dir))
+    say("  " + t("models.total", size=human(total_download(variant))))
 
     names: dict[str, str] = {}
     for index, (kind, (relative, size)) in enumerate(files.items(), start=1):
@@ -722,12 +902,12 @@ def wait_for_ollama(seconds: int = 60) -> bool:
 
 
 def start_ollama(binary: str) -> bool:
-    say("  > démarrage du service Ollama")
+    say("  > " + t("ollama.starting"))
     try:
         subprocess.Popen([binary, "serve"], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
     except OSError as exc:
-        warn(f"impossible de démarrer Ollama : {exc}")
+        warn(t("ollama.start_failed", error=exc))
         return False
     return wait_for_ollama(30)
 
@@ -742,11 +922,11 @@ def run_ollama_installer() -> bool:
                                    "--accept-source-agreements"])
             if done.returncode == 0:
                 return True
-            warn("winget a échoué, repli sur l'installateur graphique")
+            warn(t("ollama.winget_failed"))
         setup = ROOT / "OllamaSetup.exe"
         download("https://ollama.com/download/OllamaSetup.exe", setup,
                  label="OllamaSetup.exe")
-        say("  > l'installateur graphique s'ouvre : terminez-le, puis revenez ici")
+        say("  > " + t("ollama.gui"))
         subprocess.run([str(setup)])
         setup.unlink(missing_ok=True)
         return True
@@ -757,7 +937,7 @@ def run_ollama_installer() -> bool:
             if subprocess.run(["brew", "install", "--cask", "ollama"]).returncode == 0:
                 subprocess.run(["open", "-a", "Ollama"])
                 return True
-            warn("brew a échoué, repli sur le .dmg")
+            warn(t("ollama.brew_failed"))
         dmg = ROOT / "Ollama.dmg"
         download("https://ollama.com/download/Ollama.dmg", dmg, label="Ollama.dmg")
         mount = "/Volumes/Ollama"
@@ -774,11 +954,11 @@ def run_ollama_installer() -> bool:
         return True
 
     say("  > curl -fsSL https://ollama.com/install.sh | sh")
-    warn("ce script demande sudo : votre mot de passe vous sera peut-être demandé")
+    warn(t("ollama.sudo"))
     done = subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True)
     if done.returncode == 0:
         return True
-    warn("le script officiel a échoué — installez Ollama à la main si vous le souhaitez")
+    warn(t("ollama.script_failed"))
     return False
 
 
@@ -802,52 +982,53 @@ def pull_translate_model() -> bool:
                 event = json.loads(line)
                 if event.get("error"):
                     clear_line()
-                    warn(f"pull refusé : {event['error']}")
+                    warn(t("ollama.pull_refused", error=event["error"]))
                     return False
                 done_bytes, total = event.get("completed", 0), event.get("total", 0)
                 now = time.monotonic()
                 if total and now - last_print >= 0.1:
                     last_print = now
-                    render(event.get("status", "téléchargement")[:34],
+                    # Le statut vient d'Ollama, en anglais : c'est un état de
+                    # protocole (`pulling`, `verifying`), pas un message à nous.
+                    render(event.get("status", t("ollama.pull_status"))[:34],
                            done_bytes / total, f"{human(done_bytes)}/{human(total)}")
     except Exception as exc:
         clear_line()
-        warn(f"le téléchargement du modèle de traduction a échoué : {exc}")
+        warn(t("ollama.pull_failed", error=exc))
         return False
     clear_line()
-    ok(f"{TRANSLATE_MODEL} prêt")
+    ok(t("ollama.ready", model=TRANSLATE_MODEL))
     return True
 
 
 def setup_ollama(args) -> bool:
     """Rend `enabled` pour config.ini. N'est jamais bloquant : sans Ollama le studio
     fonctionne, les prompts partent simplement verbatim."""
-    title(4, "Ollama (traduction des prompts — optionnel)")
+    title(4, t("step.ollama"))
 
     if ollama_running():
-        ok("Ollama répond déjà sur 11434")
+        ok(t("ollama.answering"))
         return pull_translate_model()
 
     binary = ollama_binary()
     if binary:
-        ok(f"Ollama installé mais arrêté : {binary}")
+        ok(t("ollama.stopped", path=binary))
         if start_ollama(binary):
             return pull_translate_model()
-        warn("service injoignable — la traduction sera désactivée pour l'instant")
+        warn(t("ollama.unreachable"))
         return False
 
     if args.no_ollama:
-        say("  Ollama ignoré (--no-ollama).")
+        say("  " + t("ollama.skipped"))
         return False
 
-    say("  Ollama est absent. Il sert à traduire vos prompts vers l'anglais avant")
-    say("  de les envoyer au modèle. Sans lui, tout marche, mais un prompt écrit en")
-    say(f"  français part tel quel. Coût : ~1 Go de logiciel + 3,3 Go de modèle.")
+    for line in ("ollama.pitch1", "ollama.pitch2", "ollama.pitch3"):
+        say("  " + t(line))
     if not IS_WINDOWS and sys.platform != "darwin":
-        say("  Sur Linux, son installation demande sudo.")
-    if not ask_yes_no("  L'installer maintenant ?", default=True,
+        say("  " + t("ollama.linux_sudo"))
+    if not ask_yes_no("  " + t("ollama.ask"), default=True,
                       assume=True if args.install_ollama else None):
-        say("  Ollama non installé : les prompts partiront verbatim.")
+        say("  " + t("ollama.declined"))
         return False
 
     if not run_ollama_installer():
@@ -855,8 +1036,8 @@ def setup_ollama(args) -> bool:
     if not wait_for_ollama(60):
         binary = ollama_binary()
         if not (binary and start_ollama(binary)):
-            warn("Ollama installé mais le service ne répond pas encore")
-            warn("relancez l'installateur plus tard : il rattrapera le modèle")
+            warn(t("ollama.no_service"))
+            warn(t("ollama.rerun"))
             return False
     return pull_translate_model()
 
@@ -871,8 +1052,8 @@ def read_existing_ini() -> configparser.ConfigParser:
 
 
 def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
-                 previous: configparser.ConfigParser) -> None:
-    title(5, "config.ini")
+                 previous: configparser.ConfigParser, accelerator: str) -> None:
+    title(5, t("step.config"))
     layout = resolve_comfy_layout(comfy_root)
     output_dir = layout[2] / "output"
 
@@ -888,16 +1069,24 @@ def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
         except ValueError:
             return str(path)
 
+    # Un réglage machine posé à la main (--reserve-vram sur une petite carte) n'a pas
+    # à être effacé par une réinstallation ; à défaut, ce que réclame l'accélérateur
+    # détecté — sans quoi une machine sans CUDA écrirait une configuration que
+    # ComfyUI ne sait pas démarrer, et l'erreur n'apparaîtrait qu'au premier run.
+    cpu_arguments = cpu_mode_args(accelerator)
+    extra_args = (previous.get("comfyui", "extra_args", fallback="").strip()
+                  or " ".join(cpu_arguments))
+
     parser = configparser.ConfigParser()
     parser["comfyui"] = {
         "url": f"http://127.0.0.1:{COMFY_PORT}",
         "portable_dir": portable(comfy_root),
         "output_dir": portable(output_dir),
         "managed": "true",
-        # Préservé d'une installation précédente : c'est un réglage machine
-        # (--reserve-vram sur une petite carte) que l'installateur n'a pas à effacer.
-        "extra_args": previous.get("comfyui", "extra_args", fallback=""),
-        "job_timeout": previous.get("comfyui", "job_timeout", fallback="900"),
+        "extra_args": extra_args,
+        "job_timeout": previous.get(
+            "comfyui", "job_timeout",
+            fallback=CPU_JOB_TIMEOUT if cpu_arguments else "900"),
     }
     parser["server"] = {
         "port": previous.get("server", "port", fallback=str(STUDIO_PORT)),
@@ -917,49 +1106,116 @@ def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as handle:
         parser.write(handle)
-    ok(f"{CONFIG_PATH.name} écrit")
+    ok(t("config.written", name=CONFIG_PATH.name))
+    if extra_args:
+        say("  " + t("config.extra_args", args=extra_args))
 
 
 # ---------- 6. Récapitulatif ----------
 
 def summary(comfy_root: Path, models_dir: Path, variant: str, models: dict[str, str],
             ollama_enabled: bool) -> None:
-    title(6, "Terminé")
-    say(f"  ComfyUI    {comfy_root}")
-    say(f"  Modèles    {models_dir}  ({variant}, {human(total_download(variant))})")
+    title(6, t("step.done"))
+    labels = [t("done.comfy"), t("done.models"), t("done.translation")]
+    # La colonne est calée sur le plus long des trois libellés traduits : « Übersetzung »
+    # est deux fois plus long que « 翻译 », et un ljust fixe casserait l'alignement.
+    width = max(display_width(label) for label in labels) + 2
+    say("  " + pad(labels[0], width) + str(comfy_root))
+    say("  " + pad(labels[1], width)
+        + f"{models_dir}  ({variant}, {human(total_download(variant))})")
     for kind in ("unet", "clip", "vae"):
-        say(f"             {kind:<5} {models[kind]}")
-    say(f"  Traduction {'translategemma via Ollama' if ollama_enabled else 'désactivée — prompts verbatim'}")
+        say("  " + " " * width + f"{kind:<5} {models[kind]}")
+    say("  " + pad(labels[2], width)
+        + t("done.translation_on" if ollama_enabled else "done.translation_off"))
     if not ollama_enabled:
-        say("             (relancez install.py plus tard pour l'ajouter)")
+        say("  " + " " * width + t("done.add_later"))
     say("")
-    say("  Pour démarrer :")
+    say("  " + t("done.to_start"))
     say("      run.bat" if IS_WINDOWS else "      ./run.sh")
-    say(f"  Le studio écoutera sur http://127.0.0.1:{STUDIO_PORT} "
-        f"et ComfyUI sur {COMFY_PORT}.")
+    say("  " + t("done.listen", studio=STUDIO_PORT, comfy=COMFY_PORT))
+
+
+# ---------- Démarrage ----------
+# Pas une septième étape : rien à installer ici, et la barre s'arrête à 6/6.
+
+def launch_studio(args) -> int:
+    """Enchaîne sur `run.py`, dans la même console.
+
+    L'installation finie, il ne reste rien à décider : la seule suite utile est de
+    lancer le studio, et qui vient de regarder une barre de progression pendant
+    vingt minutes n'a pas à aller chercher un second fichier pour voir le résultat.
+    `--no-run` rend la main à qui installe sans vouloir démarrer (image, CI).
+    """
+    if args.no_run:
+        return 0
+    say("")
+    if not ask_yes_no("  " + t("run.ask"), default=True,
+                      assume=True if args.yes else None):
+        return 0
+    say("")
+    try:
+        process = subprocess.Popen([sys.executable, str(ROOT / "run.py")], cwd=str(ROOT))
+    except OSError as exc:
+        # run.py effacé, interpréteur illisible : l'installation, elle, a réussi.
+        warn(t("run.failed", error=exc))
+        return 0
+    while True:
+        try:
+            return process.wait()
+        except KeyboardInterrupt:
+            # Le Ctrl+C de la console frappe les deux processus. run.py a son propre
+            # arrêt propre à mener — il doit tuer l'arbre ComfyUI — et rendre la main
+            # avant lui laisserait ces processus vivants derrière nous.
+            continue
 
 
 # ---------- Entrée ----------
 
+def prescan_language(argv) -> str:
+    """La langue, avant même qu'argparse existe.
+
+    L'aide d'argparse est traduite elle aussi ; il faut donc connaître la langue
+    pour construire le parseur, alors que `--lang` se trouve dans ce qu'il n'a pas
+    encore lu. D'où cette lecture au plus simple : elle ne valide rien, `--lang`
+    reste vérifié par `choices` juste après.
+    """
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    for index, argument in enumerate(arguments):
+        if argument == "--lang" and index + 1 < len(arguments):
+            return normalize_language(arguments[index + 1]) or detect_system_language()
+        if argument.startswith("--lang="):
+            return normalize_language(argument.partition("=")[2]) or detect_system_language()
+    return detect_system_language()
+
+
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="Installateur de comfyui-zimage")
+    parser = argparse.ArgumentParser(description=t("cli.description"))
+    parser.add_argument("--lang", choices=tuple(LANGUAGES),
+                        help=t("cli.lang", codes=", ".join(LANGUAGES)))
     parser.add_argument("--variant", choices=("quantized", "bf16"),
-                        help="force la variante des modèles au lieu de la déduire")
-    parser.add_argument("--comfy-dir",
-                        help="racine d'une installation ComfyUI à réutiliser ou à créer")
+                        help=t("cli.variant"))
+    parser.add_argument("--comfy-dir", help=t("cli.comfy_dir"))
     parser.add_argument("--install-ollama", action="store_true",
-                        help="installe Ollama sans poser la question")
-    parser.add_argument("--no-ollama", action="store_true",
-                        help="n'installe pas Ollama et ne demande rien")
-    parser.add_argument("--yes", "-y", action="store_true",
-                        help="accepte les valeurs par défaut sans rien demander")
+                        help=t("cli.install_ollama"))
+    parser.add_argument("--no-ollama", action="store_true", help=t("cli.no_ollama"))
+    parser.add_argument("--no-run", action="store_true", help=t("cli.no_run"))
+    parser.add_argument("--yes", "-y", action="store_true", help=t("cli.yes"))
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> int:
+    language = load_language(prescan_language(argv))
     args = parse_args(argv)
-    say("comfyui-zimage — installation")
-    say(f"Projet : {ROOT}")
+
+    # La langue du système fait foi ; le sélecteur ne sert qu'à en changer. On ne
+    # le montre donc que si quelqu'un est là pour répondre, et si la ligne de
+    # commande n'a pas déjà tranché.
+    if not args.lang and not args.yes and sys.stdin is not None and sys.stdin.isatty():
+        load_language(choose_language(language))
+
+    say("")
+    say(t("boot.header"))
+    say(t("boot.project", path=ROOT))
 
     previous = read_existing_ini()
     accelerator, variant = preflight(args)
@@ -972,9 +1228,9 @@ def main(argv=None) -> int:
 
     models = download_models(models_dir, variant)
     ollama_enabled = setup_ollama(args)
-    write_config(comfy_root, models, ollama_enabled, previous)
+    write_config(comfy_root, models, ollama_enabled, previous, accelerator)
     summary(comfy_root, models_dir, variant, models, ollama_enabled)
-    return 0
+    return launch_studio(args)
 
 
 if __name__ == "__main__":
@@ -982,5 +1238,5 @@ if __name__ == "__main__":
         sys.exit(main())
     except KeyboardInterrupt:
         say("")
-        say("Interrompu. Relancez l'installateur : il reprendra où il s'est arrêté.")
+        say(t("interrupted"))
         sys.exit(130)

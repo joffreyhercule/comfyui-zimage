@@ -25,6 +25,7 @@ sys.path.insert(0, str(_PROJECT_ROOT))
 
 from studio import dispatcher  # noqa: E402
 from studio.config import MAX_SIDE, MEDIA_DIR, MIN_SIDE, PUBLIC_BASE_URL  # noqa: E402
+from studio.i18n import LANGUAGES  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,24 @@ def _origin_marker(result: dict) -> str:
             f"filename={filename} type={comfy.get('type', 'output')}")
 
 
+def _with_language_codes(func):
+    """Pose la liste des langues dans la docstring, depuis `studio/i18n.py`.
+
+    L'énumérer à la main ici en ferait une quatorzième copie, que rien ne
+    rappellerait de mettre à jour. Le remplacement passe par `replace` et non par
+    `format` : une accolade ajoutée un jour dans la docstring ferait lever le
+    second, à l'import du serveur.
+
+    Placé sous `@mcp.tool()`, donc appliqué avant lui : le SDK lit la docstring
+    déjà complétée.
+    """
+    func.__doc__ = func.__doc__.replace(
+        "{codes}", ", ".join(f"'{code}'" for code in LANGUAGES))
+    return func
+
+
 @mcp.tool()
+@_with_language_codes
 async def generate_image(prompt: str, width: int = 1024, height: int = 1024,
                          seed: int | None = None, lang: str = "en") -> list:
     """Generate an image from a text prompt with Z-Image Turbo.
@@ -99,8 +117,7 @@ async def generate_image(prompt: str, width: int = 1024, height: int = 1024,
             so any aspect ratio is available. Default 1024.
         seed: Optional seed, for a reproducible result. Omitted, one is drawn and
             reported back so the image can be reproduced later.
-        lang: ISO code of the language the prompt is written in ('en', 'fr', 'es',
-            'de', 'it', 'pt', 'nl', 'pl', 'ru', 'ja', 'zh', 'ko', 'ar'). Anything
+        lang: ISO code of the language the prompt is written in ({codes}). Anything
             other than 'en' is translated to English before generation when Ollama
             is available; otherwise the prompt is sent verbatim.
 
