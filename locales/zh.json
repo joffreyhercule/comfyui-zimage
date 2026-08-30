@@ -133,6 +133,7 @@
   "ollama.rerun": "稍后重新运行安装程序：它会补上模型",
 
   "config.written": "已写入 {name}",
+  "config.port_moved": "{name}：本机无法使用端口 {old}（保留范围，或已被占用），改写为 {new}",
   "config.extra_args": "ComfyUI 参数：{args}",
 
   "done.comfy": "ComfyUI",

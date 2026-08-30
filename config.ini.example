@@ -3,9 +3,12 @@
 ; l'installation de cette machine-là.
 
 [comfyui]
-; ComfyUI démarré par run.py sur un port dédié : une instance
-; personnelle sur 8188 n'est ni touchée ni lancée.
-url = http://127.0.0.1:8288
+; Port de ComfyUI, démarré par run.py. 8288 et non 8188 : une instance
+; personnelle de ComfyUI n'est ni touchée ni lancée.
+port = 8288
+; Vide, sauf pour un ComfyUI sur une AUTRE machine : cette URL fait alors foi, et
+; le port ci-dessus en est déduit. Le port n'est ainsi déclaré qu'une fois.
+url =
 ; Racine de l'installation ComfyUI (portable Windows ou clone git). Relatif au
 ; projet — donc le renommer ou le déplacer ne casse rien. Un chemin absolu est
 ; accepté, pour une installation ComfyUI située ailleurs.
@@ -25,8 +28,14 @@ extra_args =
 job_timeout = 900
 
 [server]
-port = 8000
-public_base_url = http://127.0.0.1:8000
+; Port du studio. 8388 et non 8000 : sous Windows, 8000 tombe souvent dans une plage
+; réservée par Hyper-V ou WSL, où toute liaison est refusée (WinError 10013), quand il
+; n'est pas simplement pris par un autre serveur. L'installateur en change de lui-même
+; si celui-ci est inutilisable, et run.py le dit avant de démarrer quoi que ce soit.
+port = 8388
+; Vide = http://127.0.0.1:<port>. À remplir derrière un proxy, ou pour une machine
+; joignable d'ailleurs : c'est l'URL que le serveur MCP rend à son client.
+public_base_url =
 
 [ollama]
 ; false quand Ollama est absent : les prompts partent verbatim.

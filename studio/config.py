@@ -9,6 +9,7 @@ tests et un premier lancement possibles avant toute installation.
 import configparser
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 # ---------- Chemins ----------
@@ -74,9 +75,27 @@ def _path(raw: str | None, default: Path) -> Path:
     return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()
 
 
-# Port 8288, pas 8188 : une installation personnelle de ComfyUI n'est ni touchée
-# ni lancée par le studio.
-COMFYUI_URL: str = _ini("comfyui", "url", os.getenv("COMFYUI_URL", "http://127.0.0.1:8288"))
+def _port_of(url: str, default: int) -> int:
+    """Port d'une URL, `default` si elle n'en porte pas.
+
+    `urlsplit` plutôt qu'un `rsplit(":")` : une barre finale, un chemin ou une URL sans
+    port rendraient un numéro faux, et un numéro faux ici lance ComfyUI d'un côté
+    pendant que le client parle de l'autre.
+    """
+    try:
+        return urlsplit(url).port or default
+    except ValueError:
+        return default
+
+
+# Le PORT est la déclaration ; l'URL n'existe que pour un ComfyUI sur une autre
+# machine, et fait alors foi — c'est d'elle qu'on redéduit le port. Écrire les deux
+# reviendrait à déclarer le port deux fois, donc à pouvoir se contredire.
+# 8288, pas 8188 : une installation personnelle de ComfyUI n'est ni touchée ni lancée.
+COMFY_PORT: int = _ini_int("comfyui", "port", int(os.getenv("COMFY_PORT", "8288")))
+COMFYUI_URL: str = ((_ini("comfyui", "url", os.getenv("COMFYUI_URL", "")) or "").rstrip("/")
+                    or f"http://127.0.0.1:{COMFY_PORT}")
+COMFY_PORT = _port_of(COMFYUI_URL, COMFY_PORT)
 
 # Racine de l'installation ComfyUI. `resolve_comfy_layout` en déduit l'interpréteur
 # et le main.py, quelle que soit la disposition (portable Windows ou clone git).
@@ -109,11 +128,17 @@ MODEL_VAE: str = _ini("models", "vae", "ae.safetensors")
 
 # ---------- Serveur ----------
 
-AGENT_PORT: int = _ini_int("server", "port", int(os.getenv("AGENT_PORT", "8000")))
-PUBLIC_BASE_URL: str = _ini(
-    "server", "public_base_url",
-    os.getenv("PUBLIC_BASE_URL", f"http://127.0.0.1:{AGENT_PORT}"),
-)
+# 8388 et non 8000 : sous Windows, 8000 tombe régulièrement dans une plage réservée
+# par Hyper-V ou WSL, où toute liaison est refusée (WinError 10013), quand il n'est pas
+# simplement pris par un autre serveur de développement. 8188 est le ComfyUI de tout le
+# monde, 8288 le nôtre, 8388 le studio.
+AGENT_PORT: int = _ini_int("server", "port", int(os.getenv("AGENT_PORT", "8388")))
+# Vide = l'adresse locale du port ci-dessus, seule et unique déclaration. On ne la
+# remplit que derrière un proxy ou pour une machine joignable d'ailleurs : c'est l'URL
+# que le serveur MCP rend à son client pour aller chercher les images.
+PUBLIC_BASE_URL: str = ((_ini("server", "public_base_url",
+                              os.getenv("PUBLIC_BASE_URL", "")) or "").rstrip("/")
+                        or f"http://127.0.0.1:{AGENT_PORT}")
 
 
 # ---------- Ollama (traduction des prompts, optionnel) ----------

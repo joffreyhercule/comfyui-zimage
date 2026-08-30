@@ -34,12 +34,13 @@ from studio.config import (  # noqa: E402
     AGENT_PORT,
     COMFY_EXTRA_ARGS,
     COMFY_MANAGED,
+    COMFY_PORT,
     COMFY_PORTABLE_DIR,
     COMFYUI_URL,
     LOGS_DIR,
 )
+from studio.ports import FORBIDDEN, FREE, bind_status  # noqa: E402
 
-COMFY_PORT = int(COMFYUI_URL.rsplit(":", 1)[-1].split("/")[0] or 8288)
 COMFY_LOG = LOGS_DIR / "comfyui.log"
 STARTUP_TIMEOUT = 180.0
 IS_WINDOWS = os.name == "nt"
@@ -53,6 +54,31 @@ for _stream in (sys.stdout, sys.stderr):
 
 def say(message: str) -> None:
     print(message, flush=True)
+
+
+def port_ready(port: int, label: str, section: str) -> bool:
+    """Le port répond-il de nous ? Message clair et arrêt net sinon.
+
+    Sondé AVANT de démarrer quoi que ce soit : sans cela ComfyUI charge ses modèles
+    une minute durant, uvicorn échoue sur son bind, et tout est défait sans qu'on ait
+    rien appris de plus qu'une trace d'erreur au milieu du journal.
+    """
+    status = bind_status(port)
+    if status == FREE:
+        return True
+    if status == FORBIDDEN:
+        # WinError 10013 : une plage réservée par Hyper-V, WSL ou un moteur de
+        # conteneurs. Le port ne marchera jamais, quoi qu'on attende.
+        say(f"Le port {port} ({label}) est refusé par le système, pas occupé.")
+        say("C'est une plage réservée. Pour les lister, sous Windows :")
+        say("    netsh interface ipv4 show excludedportrange protocol=tcp")
+        say(f"Changez [{section}] port dans config.ini, ou relancez l'installateur :")
+        say("il en choisira un qui tienne sur cette machine.")
+    else:
+        say(f"Le port {port} ({label}) est déjà pris par un autre programme.")
+        say(f"Une instance tourne peut-être déjà : http://127.0.0.1:{port}")
+        say(f"Sinon, changez [{section}] port dans config.ini.")
+    return False
 
 
 def comfy_responds(timeout: float = 2.0) -> bool:
@@ -72,6 +98,8 @@ def start_comfy() -> subprocess.Popen | None:
         say("[comfyui] portable_dir dans config.ini.")
         return None
     python, main_py, cwd = layout
+    if not port_ready(COMFY_PORT, "ComfyUI", "comfyui"):
+        return None
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     log_handle = open(COMFY_LOG, "w", encoding="utf-8", errors="replace")
@@ -152,6 +180,11 @@ def open_browser_soon(url: str) -> None:
 
 
 def main() -> int:
+    # Le port du studio d'abord : c'est le seul échec qui, sans cela, se produirait
+    # APRÈS une minute de chargement de modèles, pour tout défaire aussitôt.
+    if not port_ready(AGENT_PORT, "studio", "server"):
+        return 1
+
     comfy_process = None
     if comfy_responds():
         # Instance déjà en route : ni démarrée ni arrêtée par nous.

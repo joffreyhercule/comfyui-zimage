@@ -115,8 +115,9 @@ anywhere.
 [python.org](https://www.python.org/downloads/), making sure to tick "Add python.exe to
 PATH", then start the installer again.
 
-**The browser doesn't open** — go to [http://127.0.0.1:8000](http://127.0.0.1:8000)
-yourself.
+**The browser doesn't open** — go to [http://127.0.0.1:8388](http://127.0.0.1:8388)
+yourself. If the installer had to move the port, the console prints the right address on
+startup, and `config.ini` holds it under `[server] port`.
 
 **"ComfyUI did not answer"** — the engine did not start. The file `logs/comfyui.log`
 says why. Most often: not enough video memory, or an incomplete installation — running

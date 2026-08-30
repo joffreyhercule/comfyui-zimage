@@ -133,6 +133,7 @@
   "ollama.rerun": "запустите установщик позже: он дозагрузит модель",
 
   "config.written": "{name} записан",
+  "config.port_moved": "{name}: порт {old} на этой машине непригоден (зарезервированный диапазон или занят), записан {new}",
   "config.extra_args": "Аргументы ComfyUI: {args}",
 
   "done.comfy": "ComfyUI",

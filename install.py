@@ -30,6 +30,7 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -37,6 +38,7 @@ import httpx
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 from studio.comfy.layout import comfy_models_dir, resolve_comfy_layout  # noqa: E402
+from studio.ports import pick_port  # noqa: E402
 from studio.i18n import (  # noqa: E402
     LANGUAGES,
     NATIVE_NAMES,
@@ -54,7 +56,10 @@ PY_MIN = (3, 10)
 # ComfyUI tourne sur un port dédié : une installation personnelle sur 8188 n'est
 # ni touchée ni lancée.
 COMFY_PORT = 8288
-STUDIO_PORT = 8000
+# 8388 et non 8000 : sous Windows, 8000 tombe régulièrement dans une plage réservée par
+# Hyper-V ou WSL, où toute liaison est refusée (WinError 10013). 8188 est le ComfyUI de
+# tout le monde, 8288 le nôtre, 8388 le studio.
+STUDIO_PORT = 8388
 
 HF_BASE = "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/"
 
@@ -1118,8 +1123,70 @@ def read_existing_ini() -> configparser.ConfigParser:
     return parser
 
 
+def answers(url: str) -> bool:
+    """Quelque chose répond-il déjà, et de nous, sur cette URL ?"""
+    try:
+        return httpx.get(url, timeout=2.0).status_code == 200
+    except (httpx.HTTPError, OSError, ValueError):  # rien n'écoute, ou pas en HTTP
+        return False
+
+
+def previous_port(previous: configparser.ConfigParser, section: str, default: int) -> int:
+    """Le port de l'installation précédente : la clé `port`, sinon celui de son URL.
+
+    Les config.ini d'avant ne déclaraient que l'URL. Une réinstallation doit retrouver
+    le port qu'elle portait, sans quoi elle remettrait le défaut du projet sur une
+    machine où l'utilisateur avait déjà tranché.
+    """
+    if previous.has_option(section, "port"):
+        try:
+            return previous.getint(section, "port")
+        except ValueError:
+            pass
+    raw = (previous.get(section, "url", fallback="")
+           or previous.get(section, "public_base_url", fallback="")).strip()
+    try:
+        return urlsplit(raw).port or default
+    except ValueError:
+        return default
+
+
+def choose_port(previous: configparser.ConfigParser, section: str, default: int,
+                health: str, label: str) -> int:
+    """Le port à écrire : celui qu'on veut, ou le premier qui tienne sur cette machine.
+
+    Un port occupé par le composant à qui il est destiné reste le bon — un ComfyUI déjà
+    lancé, le studio en train de tourner pendant qu'on réinstalle. Un port refusé par le
+    système, lui, ne marchera jamais : le découvrir ici évite de le découvrir au premier
+    lancement, une fois les vingt gigaoctets téléchargés.
+    """
+    wanted = previous_port(previous, section, default)
+    chosen = pick_port(wanted, is_mine=lambda port: answers(f"http://127.0.0.1:{port}{health}"))
+    if chosen != wanted:
+        warn(t("config.port_moved", name=label, old=wanted, new=chosen))
+    return chosen
+
+
+def keep_if_remote(value: str) -> str:
+    """L'URL si elle désigne une autre machine, une chaîne vide sinon.
+
+    Une URL locale écrite en dur redéclare le port et finira par le contredire : on la
+    laisse tomber pour que le numéro reste la seule déclaration. Une URL distante, elle,
+    dit quelque chose qu'un port ne dit pas.
+    """
+    value = (value or "").strip()
+    if not value:
+        return ""
+    try:
+        host = urlsplit(value).hostname
+    except ValueError:
+        return ""
+    return "" if host in (None, "127.0.0.1", "localhost", "::1", "0.0.0.0") else value
+
+
 def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
-                 previous: configparser.ConfigParser, accelerator: str) -> None:
+                 previous: configparser.ConfigParser,
+                 accelerator: str) -> tuple[int, int]:
     title(5, t("step.config"))
     layout = resolve_comfy_layout(comfy_root)
     output_dir = layout[2] / "output"
@@ -1144,9 +1211,15 @@ def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
     extra_args = (previous.get("comfyui", "extra_args", fallback="").strip()
                   or " ".join(cpu_arguments))
 
+    comfy_port = choose_port(previous, "comfyui", COMFY_PORT, "/system_stats", "ComfyUI")
+    studio_port = choose_port(previous, "server", STUDIO_PORT, "/api/config", "studio")
+
     parser = configparser.ConfigParser()
     parser["comfyui"] = {
-        "url": f"http://127.0.0.1:{COMFY_PORT}",
+        "port": str(comfy_port),
+        # Vide sauf pour un ComfyUI sur une autre machine : le port suffit à le joindre,
+        # et deux déclarations d'un même numéro finissent toujours par diverger.
+        "url": keep_if_remote(previous.get("comfyui", "url", fallback="")),
         "portable_dir": portable(comfy_root),
         "output_dir": portable(output_dir),
         "managed": "true",
@@ -1156,10 +1229,11 @@ def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
             fallback=CPU_JOB_TIMEOUT if cpu_arguments else "900"),
     }
     parser["server"] = {
-        "port": previous.get("server", "port", fallback=str(STUDIO_PORT)),
-        "public_base_url": previous.get(
-            "server", "public_base_url",
-            fallback=f"http://127.0.0.1:{STUDIO_PORT}"),
+        "port": str(studio_port),
+        # Vide = l'adresse locale du port ci-dessus. Ne se remplit que derrière un proxy,
+        # ou pour une machine joignable d'ailleurs : c'est l'URL que le MCP rend.
+        "public_base_url": keep_if_remote(previous.get("server", "public_base_url",
+                                                       fallback="")),
     }
     parser["ollama"] = {
         "enabled": "true" if ollama_enabled else "false",
@@ -1176,12 +1250,13 @@ def write_config(comfy_root: Path, models: dict[str, str], ollama_enabled: bool,
     ok(t("config.written", name=CONFIG_PATH.name))
     if extra_args:
         say("  " + t("config.extra_args", args=extra_args))
+    return comfy_port, studio_port
 
 
 # ---------- 6. Récapitulatif ----------
 
 def summary(comfy_root: Path, models_dir: Path, variant: str, models: dict[str, str],
-            ollama_enabled: bool) -> None:
+            ollama_enabled: bool, ports: tuple[int, int]) -> None:
     title(6, t("step.done"))
     labels = [t("done.comfy"), t("done.models"), t("done.translation")]
     # La colonne est calée sur le plus long des trois libellés traduits : « Übersetzung »
@@ -1199,7 +1274,7 @@ def summary(comfy_root: Path, models_dir: Path, variant: str, models: dict[str, 
     say("")
     say("  " + t("done.to_start"))
     say("      run.bat" if IS_WINDOWS else "      ./run.sh")
-    say("  " + t("done.listen", studio=STUDIO_PORT, comfy=COMFY_PORT))
+    say("  " + t("done.listen", studio=ports[1], comfy=ports[0]))
 
 
 # ---------- Démarrage ----------
@@ -1295,8 +1370,8 @@ def main(argv=None) -> int:
 
     models = download_models(models_dir, variant)
     ollama_enabled = setup_ollama(args)
-    write_config(comfy_root, models, ollama_enabled, previous, accelerator)
-    summary(comfy_root, models_dir, variant, models, ollama_enabled)
+    ports = write_config(comfy_root, models, ollama_enabled, previous, accelerator)
+    summary(comfy_root, models_dir, variant, models, ollama_enabled, ports)
     return launch_studio(args)
 
 

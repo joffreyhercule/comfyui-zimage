@@ -133,6 +133,7 @@
   "ollama.rerun": "start het installatieprogramma later opnieuw: het haalt het model alsnog op",
 
   "config.written": "{name} geschreven",
+  "config.port_moved": "{name}: poort {old} is op deze machine onbruikbaar (gereserveerd bereik of bezet), {new} wordt genoteerd",
   "config.extra_args": "ComfyUI-argumenten: {args}",
 
   "done.comfy": "ComfyUI",

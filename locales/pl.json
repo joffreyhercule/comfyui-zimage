@@ -133,6 +133,7 @@
   "ollama.rerun": "uruchom instalator później: nadrobi pobranie modelu",
 
   "config.written": "{name} zapisano",
+  "config.port_moved": "{name}: port {old} jest nieużyteczny na tej maszynie (zakres zarezerwowany lub zajęty), zapisano {new}",
   "config.extra_args": "Argumenty ComfyUI: {args}",
 
   "done.comfy": "ComfyUI",

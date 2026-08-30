@@ -117,8 +117,9 @@ Rien n'est envoyé ailleurs.
 [python.org](https://www.python.org/downloads/) en cochant bien « Add python.exe to
 PATH », puis relancez l'installateur.
 
-**Le navigateur ne s'ouvre pas** — allez à [http://127.0.0.1:8000](http://127.0.0.1:8000)
-manuellement.
+**Le navigateur ne s'ouvre pas** — allez à [http://127.0.0.1:8388](http://127.0.0.1:8388)
+manuellement. Si l'installateur a dû déplacer le port, la console affiche la bonne
+adresse au démarrage, et `config.ini` la garde sous `[server] port`.
 
 **« ComfyUI n'a pas répondu »** — le moteur n'a pas démarré. Le fichier
 `logs/comfyui.log` en donne la raison. Le plus souvent : pas assez de mémoire vidéo,

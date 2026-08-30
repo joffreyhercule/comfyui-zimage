@@ -133,6 +133,7 @@
   "ollama.rerun": "أعِد تشغيل المُثبِّت لاحقًا: سيستكمل تنزيل النموذج",
 
   "config.written": "كُتِب {name}",
+  "config.port_moved": "{name}: المنفذ {old} غير صالح على هذا الجهاز (نطاق محجوز أو مشغول)، وسيُكتب {new} بدلًا منه",
   "config.extra_args": "وسائط ComfyUI: {args}",
 
   "done.comfy": "ComfyUI",

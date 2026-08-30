@@ -133,6 +133,7 @@
   "ollama.rerun": "後でインストーラーを再実行してください。モデルを取得し直します",
 
   "config.written": "{name} を書き出しました",
+  "config.port_moved": "{name}: このマシンではポート {old} を使えません (予約範囲、または使用中)。代わりに {new} を書き込みます",
   "config.extra_args": "ComfyUI の引数: {args}",
 
   "done.comfy": "ComfyUI",

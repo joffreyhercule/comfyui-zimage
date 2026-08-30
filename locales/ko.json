@@ -133,6 +133,7 @@
   "ollama.rerun": "나중에 설치 프로그램을 다시 실행하세요: 모델을 이어서 받습니다",
 
   "config.written": "{name} 기록됨",
+  "config.port_moved": "{name}: 이 컴퓨터에서는 포트 {old}을(를) 쓸 수 없습니다(예약 범위이거나 사용 중). 대신 {new}을(를) 기록합니다",
   "config.extra_args": "ComfyUI 인자: {args}",
 
   "done.comfy": "ComfyUI",

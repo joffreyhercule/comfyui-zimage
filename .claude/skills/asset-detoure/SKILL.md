@@ -52,7 +52,7 @@ huge sparkling eyes, rosy pink cheeks`.
 Le résultat fournit une ligne `Download URL:` (HTTP absolu). La récupérer :
 
 ```bash
-curl -s -o assets/creature_1.png "http://127.0.0.1:8000/media/.../img_xxx.png"
+curl -s -o assets/creature_1.png "http://127.0.0.1:8388/media/.../img_xxx.png"
 ```
 
 Le studio doit tourner pour que cette URL réponde. S'il est arrêté, l'image existe
