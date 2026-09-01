@@ -40,7 +40,7 @@ progression et vous dit ce qu'il fait.
 > **Interrompu ?** Relancez-le simplement. Il reprend là où il s'était arrêté et ne
 > retélécharge rien de ce qui est déjà là.
 
-Il vous posera trois questions.
+Il vous posera deux questions.
 
 **La langue**, d'abord. L'installateur se met d'office dans celle de votre ordinateur
 et affiche la liste des treize disponibles : tapez `Entrée` pour garder la sienne, ou
@@ -53,12 +53,12 @@ langue. C'est **facultatif** — vous pouvez répondre non et l'ajouter plus tar
 relançant l'installateur. Sans lui, écrivez vos descriptions en anglais pour de
 meilleurs résultats.
 
-**Le lancement du studio**, enfin, une fois tout en place : répondre oui le démarre
-dans la foulée, et vous n'avez rien d'autre à ouvrir.
+Une fois tout en place, l'installateur démarre le studio lui-même et votre navigateur
+s'ouvre dessus. Vous n'avez rien d'autre à lancer.
 
 > **Sans surveillance ?** `install.bat --yes` accepte tous les choix par défaut et ne
-> pose aucune question — la langue du système est alors retenue sans rien demander, et
-> le studio démarre tout seul. `--no-run` installe sans rien lancer.
+> pose aucune question — la langue du système est alors retenue sans rien demander.
+> `--no-run` installe sans rien démarrer, pour une image ou une intégration continue.
 
 ---
 
@@ -74,8 +74,9 @@ arrêter, fermez-la ou appuyez sur `Ctrl+C`.
 > **La toute première image prend 20 à 30 secondes** : le moteur charge ses modèles.
 > Les suivantes arrivent en quelques secondes.
 
-L'installateur propose de le faire pour vous à la fin : la première fois, vous n'avez
-rien à lancer à la main.
+L'installateur le fait pour vous à la fin : la première fois, vous n'avez rien à lancer
+à la main. Le navigateur s'ouvre quand le studio répond vraiment, pas une seconde avant
+— sur une machine lente, il tomberait sur une page d'erreur.
 
 ---
 

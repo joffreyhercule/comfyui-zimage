@@ -40,7 +40,7 @@ progress and tells you what it is doing.
 > **Interrupted?** Just start it again. It picks up where it left off and re-downloads
 > nothing that is already there.
 
-It will ask you three questions.
+It will ask you two questions.
 
 **The language**, first. The installer settles on your computer's own language and
 lists the thirteen it speaks: press `Enter` to keep it, or type a number to switch. To
@@ -51,12 +51,12 @@ English before they reach the image generator, which understands that language f
 better. It is **optional** — you can say no and add it later by running the installer
 again. Without it, write your descriptions in English for better results.
 
-**Starting the studio**, finally, once everything is in place: answering yes launches
-it straight away, and you have nothing else to open.
+Once everything is in place, the installer starts the studio itself and your browser
+opens on it. Nothing else to launch.
 
 > **Unattended?** `install.bat --yes` accepts every default and asks nothing — the
-> system language is then used without a prompt, and the studio starts on its own.
-> `--no-run` installs without starting anything.
+> system language is then used without a prompt. `--no-run` installs without starting
+> anything, for an image or a build.
 
 ---
 
@@ -72,8 +72,9 @@ press `Ctrl+C`.
 > **The very first image takes 20 to 30 seconds**: the engine is loading its models.
 > The next ones arrive in a few seconds.
 
-The installer offers to do this for you at the end, so the first time you have nothing
-to launch by hand.
+The installer does this for you at the end, so the first time round you have nothing to
+launch by hand. The browser opens once the studio really answers — not a second before,
+which on a slow machine would land on an error page.
 
 ---
 

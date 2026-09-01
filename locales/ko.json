@@ -144,7 +144,7 @@
   "done.add_later": "(나중에 install.py를 다시 실행하면 추가됩니다)",
   "done.to_start": "실행하려면:",
   "done.listen": "스튜디오는 http://127.0.0.1:{studio}에서, ComfyUI는 {comfy}에서 기다립니다.",
-  "run.ask": "지금 스튜디오를 시작할까요?",
+  "run.starting": "스튜디오를 시작합니다 — 브라우저가 저절로 열립니다",
   "run.failed": "run.py를 시작할 수 없습니다: {error}",
 
   "cli.description": "comfyui-zimage 설치 프로그램",

@@ -144,7 +144,7 @@
   "done.add_later": "(uruchom install.py później, aby je dodać)",
   "done.to_start": "Aby uruchomić:",
   "done.listen": "Studio będzie nasłuchiwać na http://127.0.0.1:{studio}, a ComfyUI na {comfy}.",
-  "run.ask": "Uruchomić studio teraz?",
+  "run.starting": "Uruchamianie studia — przeglądarka otworzy się sama",
   "run.failed": "Nie udało się uruchomić run.py: {error}",
 
   "cli.description": "Instalator comfyui-zimage",

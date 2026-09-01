@@ -144,7 +144,7 @@
   "done.add_later": "(запустите install.py позже, чтобы добавить его)",
   "done.to_start": "Чтобы запустить:",
   "done.listen": "Студия будет слушать на http://127.0.0.1:{studio}, а ComfyUI на {comfy}.",
-  "run.ask": "Запустить студию сейчас?",
+  "run.starting": "Запуск студии — браузер откроется сам",
   "run.failed": "Не удалось запустить run.py: {error}",
 
   "cli.description": "Установщик comfyui-zimage",

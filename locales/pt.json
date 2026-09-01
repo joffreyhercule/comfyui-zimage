@@ -144,7 +144,7 @@
   "done.add_later": "(volte a lançar o install.py mais tarde para a acrescentar)",
   "done.to_start": "Para arrancar:",
   "done.listen": "O estúdio ficará à escuta em http://127.0.0.1:{studio} e o ComfyUI na {comfy}.",
-  "run.ask": "Arrancar o estúdio agora?",
+  "run.starting": "A arrancar o estúdio — o navegador vai abrir sozinho",
   "run.failed": "Não foi possível arrancar o run.py: {error}",
 
   "cli.description": "Instalador do comfyui-zimage",

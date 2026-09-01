@@ -144,7 +144,7 @@
   "done.add_later": "（稍后重新运行 install.py 即可加上）",
   "done.to_start": "启动方式：",
   "done.listen": "工作室将监听 http://127.0.0.1:{studio}，ComfyUI 监听 {comfy}。",
-  "run.ask": "现在启动工作室吗？",
+  "run.starting": "正在启动工作室 — 浏览器会自动打开",
   "run.failed": "无法启动 run.py：{error}",
 
   "cli.description": "comfyui-zimage 安装程序",

@@ -144,7 +144,7 @@
   "done.add_later": "(أعِد تشغيل install.py لاحقًا لإضافتها)",
   "done.to_start": "للتشغيل:",
   "done.listen": "سيستمع الاستوديو على ‎http://127.0.0.1:{studio}‎ و ComfyUI على {comfy}.",
-  "run.ask": "أتريد تشغيل الاستوديو الآن؟",
+  "run.starting": "جارٍ تشغيل الاستوديو — سيفتح المتصفّح من تلقاء نفسه",
   "run.failed": "تعذّر تشغيل run.py: {error}",
 
   "cli.description": "مُثبِّت comfyui-zimage",

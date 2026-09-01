@@ -1284,16 +1284,15 @@ def launch_studio(args) -> int:
     """Enchaîne sur `run.py`, dans la même console.
 
     L'installation finie, il ne reste rien à décider : la seule suite utile est de
-    lancer le studio, et qui vient de regarder une barre de progression pendant
-    vingt minutes n'a pas à aller chercher un second fichier pour voir le résultat.
-    `--no-run` rend la main à qui installe sans vouloir démarrer (image, CI).
+    lancer le studio, et qui vient de regarder une barre de progression pendant vingt
+    minutes n'a pas à aller chercher un second fichier pour voir le résultat. Pas de
+    question, donc — `--no-run` rend la main à qui installe sans vouloir démarrer
+    (image, intégration continue).
     """
     if args.no_run:
         return 0
     say("")
-    if not ask_yes_no("  " + t("run.ask"), default=True,
-                      assume=True if args.yes else None):
-        return 0
+    say("  " + t("run.starting"))
     say("")
     try:
         process = subprocess.Popen([sys.executable, str(ROOT / "run.py")], cwd=str(ROOT))

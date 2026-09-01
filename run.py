@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -167,14 +168,35 @@ def stop_comfy(process: subprocess.Popen | None) -> None:
         pass
 
 
-def open_browser_soon(url: str) -> None:
-    """Ouvre le navigateur une fois uvicorn en écoute (thread, pour ne pas bloquer)."""
+def open_browser_when_ready(url: str, port: int, timeout: float = 60.0) -> None:
+    """Ouvre le navigateur quand uvicorn accepte vraiment les connexions.
+
+    Un délai fixe serait un pari sur la vitesse de la machine : sur un portable lent, la
+    page s'ouvrirait avant que le serveur n'écoute, et le navigateur afficherait une
+    erreur que plus rien ne rattrape — un studio qui tourne, et une page morte devant
+    l'utilisateur. On sonde donc le port, et on n'ouvre que s'il répond.
+
+    Dans un thread, parce que `uvicorn.run` ne rend la main qu'à l'arrêt du serveur.
+    """
     def go() -> None:
-        time.sleep(1.5)
-        try:
-            webbrowser.open(url)
-        except Exception:  # noqa: BLE001 — pas de navigateur, pas de drame
-            pass
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            with socket.socket() as probe:
+                probe.settimeout(0.5)
+                if probe.connect_ex(("127.0.0.1", port)) == 0:
+                    opened = False
+                    try:
+                        opened = webbrowser.open(url)
+                    except Exception as exc:  # noqa: BLE001 — pas de navigateur enregistré
+                        say(f"Navigateur : {exc}")
+                    # `webbrowser.open` rend False sans rien lever quand aucun
+                    # navigateur ne répond à l'appel. Se taire alors laisserait un
+                    # studio qui tourne et un utilisateur devant une console.
+                    if not opened:
+                        say(f"Ouvrez {url} dans votre navigateur.")
+                    return
+            time.sleep(0.25)
+        say(f"Le studio n'a pas répondu en {timeout:.0f} s — ouvrez {url} vous-même.")
 
     threading.Thread(target=go, daemon=True).start()
 
@@ -207,7 +229,7 @@ def main() -> int:
     try:
         import uvicorn
 
-        open_browser_soon(url)
+        open_browser_when_ready(url, AGENT_PORT)
         # reload=False : un reload respawnerait ce processus et orphelinerait
         # l'enfant ComfyUI à chaque sauvegarde de fichier.
         uvicorn.run("studio.main:app", host="127.0.0.1", port=AGENT_PORT,
